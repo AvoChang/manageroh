@@ -45,20 +45,14 @@ export async function beginCheckin(
 }
 
 /**
- * 답변을 오늘 할 일로 저장한다.
+ * 답변 한 통을 그날의 할 일 목록으로 만든다.
  *
  * 그날의 **계획 상태** 할 일은 통째로 이 답변으로 대체한다.
  * 이미 완료 처리한 것은 건드리지 않는다 — 한 일을 지우면 기록이 거짓말이 된다.
+ * 처음 답할 때와 **그 메시지를 나중에 편집했을 때** 둘 다 이 함수를 탄다.
  */
-export async function handleCheckinAnswer(
-  client: WebClient,
-  user: UserRow,
-  session: CheckinSessionRow,
-  text: string,
-): Promise<void> {
-  const { workday } = session;
-  const milestones = listMilestones(user.slack_user_id);
-  const validIds = new Set(milestones.map((m) => m.id));
+export function saveCheckinTasks(user: UserRow, workday: Ymd, text: string): void {
+  const validIds = new Set(listMilestones(user.slack_user_id).map((m) => m.id));
 
   for (const task of tasksForDay(user.slack_user_id, workday)) {
     if (task.status === 'planned') deleteTask(task.id);
@@ -71,8 +65,20 @@ export async function handleCheckinAnswer(
     if (title.length === 0) continue;
     addTask({ userId: user.slack_user_id, workday, title, milestoneId, source: 'checkin' });
   }
+}
 
-  completeCheckinSession(user.slack_user_id, workday);
+export async function handleCheckinAnswer(
+  client: WebClient,
+  user: UserRow,
+  session: CheckinSessionRow,
+  text: string,
+  messageTs?: string,
+): Promise<void> {
+  const { workday } = session;
+  const milestones = listMilestones(user.slack_user_id);
+
+  saveCheckinTasks(user, workday, text);
+  completeCheckinSession(user.slack_user_id, workday, messageTs);
 
   const saved = tasksForDay(user.slack_user_id, workday).filter((t) => t.status !== 'done');
   await client.chat.postMessage({

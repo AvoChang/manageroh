@@ -45,6 +45,11 @@ export interface StandupRow {
   blocker_text: string;
   mood: number | null;
   submitted_at: string | null;
+  done_ts: string | null;
+  next_ts: string | null;
+  note_ts: string | null;
+  board_channel: string | null;
+  board_ts: string | null;
 }
 
 export interface StandupSessionRow {

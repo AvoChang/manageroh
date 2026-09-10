@@ -16,16 +16,62 @@ function ensureRow(userId: string, workday: string): void {
 
 export type StandupField = 'done_text' | 'next_text' | 'note_to_self' | 'blocker_text';
 
+/** 답변 본문 컬럼 ↔ 그 답변이 담긴 메시지 ts 컬럼 */
+const TS_COLUMN: Partial<Record<StandupField, 'done_ts' | 'next_ts' | 'note_ts'>> = {
+  done_text: 'done_ts',
+  next_text: 'next_ts',
+  note_to_self: 'note_ts',
+};
+
 export function saveAnswer(
   userId: string,
   workday: string,
   field: StandupField,
   text: string,
+  messageTs?: string,
 ): void {
   ensureRow(userId, workday);
+  const tsColumn = TS_COLUMN[field];
+  if (tsColumn && messageTs) {
+    db()
+      .prepare(`UPDATE standups SET ${field} = ?, ${tsColumn} = ? WHERE user_id = ? AND workday = ?`)
+      .run(text.trim(), messageTs, userId, workday);
+    return;
+  }
   db()
     .prepare(`UPDATE standups SET ${field} = ? WHERE user_id = ? AND workday = ?`)
     .run(text.trim(), userId, workday);
+}
+
+/** 편집된 메시지가 어느 질문의 답이었는지 되찾는다 */
+export function findByAnswerTs(
+  userId: string,
+  messageTs: string,
+): { row: StandupRow; field: StandupField } | undefined {
+  const row = db()
+    .prepare<[string, string, string, string], StandupRow>(
+      `SELECT * FROM standups
+       WHERE user_id = ? AND (done_ts = ? OR next_ts = ? OR note_ts = ?)
+       LIMIT 1`,
+    )
+    .get(userId, messageTs, messageTs, messageTs);
+  if (!row) return undefined;
+
+  const field: StandupField =
+    row.done_ts === messageTs ? 'done_text' : row.next_ts === messageTs ? 'next_text' : 'note_to_self';
+  return { row, field };
+}
+
+/** 보드 채널에 올린 요약의 위치 — 답이 수정되면 이걸 고친다 */
+export function setBoardMessage(
+  userId: string,
+  workday: string,
+  channel: string,
+  ts: string,
+): void {
+  db()
+    .prepare('UPDATE standups SET board_channel = ?, board_ts = ? WHERE user_id = ? AND workday = ?')
+    .run(channel, ts, userId, workday);
 }
 
 export function markSubmitted(userId: string, workday: string): StandupRow {

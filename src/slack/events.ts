@@ -1,7 +1,9 @@
 import type { App } from '@slack/bolt';
+import type { WebClient } from '@slack/web-api';
 import { openCheckinSession } from '../db/checkins.js';
 import { openSession } from '../db/standups.js';
 import { beginCheckin, handleCheckinAnswer } from '../service/checkinFlow.js';
+import { applyMessageEdit } from '../service/edits.js';
 import { doClockIn, doClockOut } from '../service/attendanceFlow.js';
 import { rememberBoardChannel, resolveUser, todayFor } from '../service/context.js';
 import { publishHome } from '../service/home.js';
@@ -22,6 +24,9 @@ interface IncomingMessage {
   text?: string;
   ts: string;
   thread_ts?: string;
+  /** subtype 이 message_changed 일 때만 채워진다 */
+  message?: { ts: string; text?: string; user?: string; bot_id?: string };
+  previous_message?: { text?: string };
 }
 
 const CLOCK_IN_WORDS = /^(출근|출근합니다|출근이요|in)$/i;
@@ -34,6 +39,13 @@ export function registerEvents(app: App): void {
   // ── DM 메시지 = done-next 대화의 답변 ───────────────────────────
   app.message(async ({ message, client }) => {
     const m = message as unknown as IncomingMessage;
+
+    // 메시지 수정은 별도 이벤트로 온다. 저장된 답도 따라가야 한다.
+    if (m.subtype === 'message_changed') {
+      await handleEdit(client, m);
+      return;
+    }
+
     if (m.bot_id || m.subtype !== undefined) return;
     if (!m.user || !m.text) return;
     if (m.user === getBotUserId()) return;
@@ -65,12 +77,12 @@ export function registerEvents(app: App): void {
       standup !== undefined && (checkin === undefined || standup.started_at >= checkin.started_at);
 
     if (standup && standupWins) {
-      await handleStandupAnswer(client, user, standup, text);
+      await handleStandupAnswer(client, user, standup, text, m.ts);
       await publishHome(client, user);
       return;
     }
     if (checkin) {
-      await handleCheckinAnswer(client, user, checkin, text);
+      await handleCheckinAnswer(client, user, checkin, text, m.ts);
       await publishHome(client, user);
       return;
     }
@@ -104,6 +116,23 @@ export function registerEvents(app: App): void {
       ),
     });
   });
+
+  /**
+   * 편집된 메시지 처리.
+   *
+   * 링크 미리보기가 붙어도 message_changed 가 오므로, 본문이 실제로 바뀐 경우만 다룬다.
+   */
+  async function handleEdit(client: WebClient, m: IncomingMessage): Promise<void> {
+    const edited = m.message;
+    if (!edited?.user || !edited.text || edited.bot_id) return;
+    if (edited.user === getBotUserId()) return;
+    if (m.channel_type !== 'im') return;
+    if (m.previous_message?.text === edited.text) return; // 본문은 그대로 (미리보기 등)
+
+    const user = await resolveUser(client, edited.user);
+    const applied = await applyMessageEdit(client, user, edited.ts, edited.text, m.channel);
+    if (applied) await publishHome(client, user);
+  }
 
   // ── 홈 탭 ───────────────────────────────────────────────────────
   app.event('app_home_opened', async ({ event, client }) => {

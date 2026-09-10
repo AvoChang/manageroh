@@ -5,11 +5,12 @@ import {
   lastSubmittedBefore,
   markSubmitted,
   saveAnswer,
+  setBoardMessage,
   setStage,
   startSession,
 } from '../db/standups.js';
 import { addTask, clearStandupTasks } from '../db/tasks.js';
-import type { StandupSessionRow, UserRow } from '../db/types.js';
+import type { StandupRow, StandupSessionRow, UserRow } from '../db/types.js';
 import { formatDuration, minutesSoFar } from '../domain/attendance.js';
 import { expectedNextWorkday, recordStandup, streakBadge } from '../domain/streak.js';
 import { getStreak } from '../db/streaks.js';
@@ -70,6 +71,7 @@ export async function handleStandupAnswer(
   user: UserRow,
   session: StandupSessionRow,
   text: string,
+  messageTs?: string,
 ): Promise<void> {
   const answer = text.trim();
   if (answer.length === 0) return;
@@ -79,7 +81,7 @@ export async function handleStandupAnswer(
 
   switch (session.stage) {
     case 'q1': {
-      saveAnswer(user.slack_user_id, workday, 'done_text', answer);
+      saveAnswer(user.slack_user_id, workday, 'done_text', answer, messageTs);
       setStage(user.slack_user_id, workday, 'q2');
       await client.chat.postMessage({
         channel,
@@ -89,7 +91,7 @@ export async function handleStandupAnswer(
       return;
     }
     case 'q2': {
-      saveAnswer(user.slack_user_id, workday, 'next_text', answer);
+      saveAnswer(user.slack_user_id, workday, 'next_text', answer, messageTs);
       syncNextDayTasks(user, workday, answer);
       setStage(user.slack_user_id, workday, 'q3');
       await client.chat.postMessage({
@@ -100,7 +102,7 @@ export async function handleStandupAnswer(
       return;
     }
     case 'q3': {
-      saveAnswer(user.slack_user_id, workday, 'note_to_self', answer);
+      saveAnswer(user.slack_user_id, workday, 'note_to_self', answer, messageTs);
       await finishStandup(client, user, workday, channel);
       return;
     }
@@ -110,7 +112,7 @@ export async function handleStandupAnswer(
 }
 
 /** NEXT 답변을 다음 근무일의 할 일로 등록한다 — 내일 아침 리마인드의 재료가 된다. */
-function syncNextDayTasks(user: UserRow, workday: Ymd, nextText: string): void {
+export function syncNextDayTasks(user: UserRow, workday: Ymd, nextText: string): void {
   const target = expectedNextWorkday(user, workday);
   if (!target) return;
 
@@ -137,16 +139,10 @@ export async function finishStandup(
   const posted = await postToBoard(
     client,
     user,
-    boardPost({
-      userId: user.slack_user_id,
-      workday,
-      standup,
-      streak: streak.current,
-      badge,
-      workedLabel,
-    }),
+    buildBoardBlocks(user, workday, standup),
     `${user.display_name || '동료'} 의 ${formatKorean(workday)} 마무리`,
   );
+  if (posted) setBoardMessage(user.slack_user_id, workday, posted.channel, posted.ts);
 
   await client.chat.postMessage({
     channel,
@@ -155,13 +151,30 @@ export async function finishStandup(
       streak: streak.current,
       badge,
       workedLabel,
-      boardPosted: posted,
+      boardPosted: posted !== null,
       stillWorking: Boolean(attendance?.clock_in && !attendance.clock_out),
     }),
     text: COPY.standup.thanks,
   });
 
   setStage(user.slack_user_id, workday, 'complete');
+}
+
+/**
+ * 보드 채널에 올릴 요약 블록. 처음 게시할 때와 **답이 수정돼 다시 그릴 때** 둘 다 쓴다.
+ * 두 곳이 갈라지면 수정본만 모양이 달라진다.
+ */
+export function buildBoardBlocks(user: UserRow, workday: Ymd, standup: StandupRow) {
+  const streak = getStreak(user.slack_user_id);
+  const minutes = minutesSoFar(getAttendance(user.slack_user_id, workday), user.tz);
+  return boardPost({
+    userId: user.slack_user_id,
+    workday,
+    standup,
+    streak: streak.current,
+    badge: streakBadge(streak.current),
+    workedLabel: minutes === null ? null : formatDuration(minutes),
+  });
 }
 
 /** 이미 제출한 날인지 */

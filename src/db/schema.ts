@@ -65,6 +65,13 @@ CREATE TABLE IF NOT EXISTS standups (
   blocker_text TEXT NOT NULL DEFAULT '',
   mood         INTEGER,
   submitted_at TEXT,                       -- Q3 까지 끝난 시각. 미완이면 NULL
+  -- 각 답변이 어느 메시지였는지. 사용자가 그 메시지를 편집하면 여기로 되찾아 간다.
+  done_ts      TEXT,
+  next_ts      TEXT,
+  note_ts      TEXT,
+  -- 보드 채널에 올린 요약. 답이 수정되면 이것도 같이 고친다.
+  board_channel TEXT,
+  board_ts      TEXT,
   UNIQUE (user_id, workday),
   FOREIGN KEY (user_id) REFERENCES users(slack_user_id) ON DELETE CASCADE
 );
@@ -88,6 +95,7 @@ CREATE TABLE IF NOT EXISTS checkin_sessions (
   workday    TEXT NOT NULL,
   stage      TEXT NOT NULL,               -- ask | complete
   channel_id TEXT NOT NULL,
+  answer_ts  TEXT,                         -- 답변 메시지. 편집되면 할 일을 다시 만든다
   started_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   PRIMARY KEY (user_id, workday),
@@ -140,4 +148,11 @@ export const MIGRATIONS: string[] = [
   // 이미 컬럼이 생긴 DB 에서만 지워진다 — 없으면 조용히 넘어간다.
   `ALTER TABLE users DROP COLUMN archive_time`,
   `ALTER TABLE users DROP COLUMN archive_reminder`,
+  // 답변 메시지를 편집하면 저장된 답도 따라가야 한다 (2026-09-10).
+  `ALTER TABLE standups ADD COLUMN done_ts TEXT`,
+  `ALTER TABLE standups ADD COLUMN next_ts TEXT`,
+  `ALTER TABLE standups ADD COLUMN note_ts TEXT`,
+  `ALTER TABLE standups ADD COLUMN board_channel TEXT`,
+  `ALTER TABLE standups ADD COLUMN board_ts TEXT`,
+  `ALTER TABLE checkin_sessions ADD COLUMN answer_ts TEXT`,
 ];

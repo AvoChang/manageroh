@@ -316,6 +316,38 @@ done-next 와 같은 구조다 — 봇이 묻고, 사용자가 평범한 메시�
 **교훈** — 영속성은 "볼륨을 붙였다" 로 끝나지 않는다. **쓰는 경로가 거기인지**까지 확인해야 하고,
 그걸 사람이 기억하게 두지 말고 프로그램이 부팅할 때 말하게 해야 한다.
 
+### 메시지를 수정해도 처음 쓴 내용이 올라갔다
+
+Q3 를 답하기 전에 NEXT 를 고쳤는데 처음 쓴 내용 그대로 채널에 올라갔다.
+
+슬랙에서 **메시지 수정은 `message_changed` 라는 별도 이벤트**로 온다.
+핸들러 첫 줄이 `if (m.subtype !== undefined) return;` 이라 수정이 닿을 길이 아예 없었다.
+
+고치려면 "이 수정된 메시지가 **어느 질문의 답**이었나" 를 알아야 한다.
+답변을 저장할 때 그 메시지의 `ts` 를 같이 적어 두는 것으로 풀었다
+(`standups.done_ts / next_ts / note_ts`, `checkin_sessions.answer_ts`).
+
+파생물도 같이 따라가야 한다.
+
+- **NEXT 를 고치면** 그걸로 만든 다음 근무일 할 일을 다시 만든다
+- **이미 채널에 요약이 올라갔으면** 그 메시지도 `chat.update` 로 고친다
+  (그래서 `postToBoard` 가 boolean 대신 `{channel, ts}` 를 돌려주고 `standups.board_ts` 에 남긴다)
+- 체크인 답변을 고치면 그날 할 일 목록을 다시 만든다
+
+**함정** — 링크 미리보기가 붙어도 `message_changed` 가 온다.
+`previous_message.text` 와 비교해서 본문이 실제로 바뀐 경우만 처리한다.
+
+### 스키마에 쉼표 하나 빠뜨려 부팅이 죽을 뻔했다
+
+컬럼을 추가하면서 `board_ts TEXT` 뒤에 쉼표를 안 찍었다.
+`CREATE TABLE` 전체가 `near "(": syntax error` 로 터진다.
+
+**`IF NOT EXISTS` 는 이걸 막아 주지 못한다.** 문법 오류는 파싱 단계라서
+기존 DB 든 새 DB 든 `exec(SCHEMA)` 가 통째로 실패하고, 배포판은 부팅이 안 된다.
+
+`npm run smoke` 가 매번 `:memory:` 로 스키마를 처음부터 만들기 때문에 커밋 전에 잡혔다.
+**도메인 테스트가 스키마 테스트 노릇까지 하고 있다** — 그 값어치를 여기 적어 둔다.
+
 ### 체크박스를 눌렀는데 네모가 그대로였다
 
 `taskChecklist` 는 처음부터 완료면 `✅`, 계획이면 `⬜️` 를 그리고 있었다.
@@ -398,7 +430,7 @@ done-next 와 같은 구조다 — 봇이 묻고, 사용자가 평범한 메시�
 ## 4. 현재 상태
 
 - 코드 44개 파일 · 약 5,200줄
-- 타입체크·빌드·`npm run smoke`(검증 78건) 전부 통과
+- 타입체크·빌드·`npm run smoke`(검증 88건) 전부 통과
 - **Railway 배포 완료 · 실제로 굴러가는 중**
 - GitHub: `AvoChang/manageroh` (public — 워크스페이스 식별 정보는 올리지 않는다)
 
@@ -502,7 +534,7 @@ SQLite 열림: /data/worklife.sqlite · 기존 파일 이어서 씀 · 4096바�
 ## 6. 확인용 명령
 
 ```bash
-npm run smoke          # 슬랙 없이 도메인 로직 78건 검증 (action_id 중복 포함)
+npm run smoke          # 슬랙 없이 도메인 로직 88건 검증 (action_id 중복 포함)
 npm run channels       # 봇이 들어가 있는 채널 id
 npm run verify-home    # 홈 탭 블록이 실제 슬랙에서 통과하는지
 npm run dev            # 실제 연결 (배포판과 겹치지 않게 주의)

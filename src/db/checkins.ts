@@ -5,6 +5,7 @@ export interface CheckinSessionRow {
   workday: string;
   stage: 'ask' | 'complete';
   channel_id: string;
+  answer_ts: string | null;
   started_at: string;
   updated_at: string;
 }
@@ -46,12 +47,25 @@ export function startCheckinSession(
   return getCheckinSession(userId, workday)!;
 }
 
-export function completeCheckinSession(userId: string, workday: string): void {
+export function completeCheckinSession(userId: string, workday: string, answerTs?: string): void {
   db()
     .prepare(
-      "UPDATE checkin_sessions SET stage = 'complete', updated_at = ? WHERE user_id = ? AND workday = ?",
+      `UPDATE checkin_sessions SET stage = 'complete', answer_ts = COALESCE(?, answer_ts), updated_at = ?
+       WHERE user_id = ? AND workday = ?`,
     )
-    .run(nowIso(), userId, workday);
+    .run(answerTs ?? null, nowIso(), userId, workday);
+}
+
+/** 편집된 메시지가 어느 날 체크인의 답이었는지 */
+export function findCheckinByAnswerTs(
+  userId: string,
+  messageTs: string,
+): CheckinSessionRow | undefined {
+  return db()
+    .prepare<[string, string], CheckinSessionRow>(
+      'SELECT * FROM checkin_sessions WHERE user_id = ? AND answer_ts = ? LIMIT 1',
+    )
+    .get(userId, messageTs);
 }
 
 /** 며칠 지나도록 답이 없는 세션은 닫는다 */

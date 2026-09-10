@@ -11,7 +11,7 @@ process.env['LOG_LEVEL'] = 'warn';
 
 const { ensureUser, updateUser } = await import('../src/db/users.js');
 const { addTask, tasksForDay } = await import('../src/db/tasks.js');
-const { saveAnswer, markSubmitted, lastSubmittedBefore } = await import('../src/db/standups.js');
+const { saveAnswer, markSubmitted, lastSubmittedBefore, getStandup } = await import('../src/db/standups.js');
 const { createMilestone } = await import('../src/db/milestones.js');
 const { setTaskMilestone, milestoneTaskCounts } = await import('../src/db/tasks.js');
 const { clockIn, clockOut, formatDuration, summarize } = await import('../src/domain/attendance.js');
@@ -205,6 +205,42 @@ const { completeCheckinSession } = await import('../src/db/checkins.js');
 completeCheckinSession(USER, WED);
 check('답하면 세션이 닫힌다', getCheckinSession(USER, WED)?.stage, 'complete');
 check('닫힌 뒤엔 열린 세션 없음', openCheckinSession(USER), undefined);
+
+console.log('\n── 답변 수정 반영 ──');
+const { findByAnswerTs, setBoardMessage } = await import('../src/db/standups.js');
+const { findCheckinByAnswerTs } = await import('../src/db/checkins.js');
+const { syncNextDayTasks } = await import('../src/service/standupFlow.js');
+
+const EDIT_DAY = '2026-09-14'; // 월요일
+saveAnswer(USER, EDIT_DAY, 'done_text', '처음 쓴 DONE', '1757000001.000100');
+saveAnswer(USER, EDIT_DAY, 'next_text', '처음 쓴 NEXT', '1757000002.000200');
+saveAnswer(USER, EDIT_DAY, 'note_to_self', '처음 쓴 한마디', '1757000003.000300');
+
+check('ts 로 DONE 을 되찾는다', findByAnswerTs(USER, '1757000001.000100')?.field, 'done_text');
+check('ts 로 NEXT 를 되찾는다', findByAnswerTs(USER, '1757000002.000200')?.field, 'next_text');
+check('ts 로 한마디를 되찾는다', findByAnswerTs(USER, '1757000003.000300')?.field, 'note_to_self');
+check('모르는 ts 는 못 찾는다', findByAnswerTs(USER, '9999.9999'), undefined);
+
+// NEXT 를 고치면 저장값과 다음날 할 일이 둘 다 따라와야 한다
+syncNextDayTasks(user0, EDIT_DAY, '처음 쓴 NEXT');
+check('처음 NEXT 로 다음날 할 일 1개', tasksForDay(USER, '2026-09-15').length, 1);
+
+saveAnswer(USER, EDIT_DAY, 'next_text', '고친 NEXT 첫째\n고친 NEXT 둘째', '1757000002.000200');
+syncNextDayTasks(user0, EDIT_DAY, '고친 NEXT 첫째\n고친 NEXT 둘째');
+check('수정본이 저장된다', getStandup(USER, EDIT_DAY)?.next_text, '고친 NEXT 첫째\n고친 NEXT 둘째');
+check('다음날 할 일이 2개로 다시 만들어진다', tasksForDay(USER, '2026-09-15').length, 2);
+check(
+  '옛 NEXT 로 만든 할 일은 사라진다',
+  tasksForDay(USER, '2026-09-15').some((t) => t.title === '처음 쓴 NEXT'),
+  false,
+);
+
+setBoardMessage(USER, EDIT_DAY, 'C_BOARD', '1757000009.000900');
+check('보드 위치가 기록된다', getStandup(USER, EDIT_DAY)?.board_ts, '1757000009.000900');
+
+startCheckinSession(USER, EDIT_DAY, 'D_TEST');
+completeCheckinSession(USER, EDIT_DAY, '1757000004.000400');
+check('체크인 답변도 ts 로 찾는다', findCheckinByAnswerTs(USER, '1757000004.000400')?.workday, EDIT_DAY);
 
 console.log('\n── 할 일 체크 표시 ──');
 const { taskChecklist } = await import('../src/slack/blocks/checkin.js');

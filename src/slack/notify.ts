@@ -38,20 +38,24 @@ export async function postText(
   await client.chat.postMessage({ channel, text });
 }
 
-/** 공개 보드 채널에 올린다. 봇이 채널에 없으면 조용히 넘어간다. */
+/**
+ * 공개 보드 채널에 올리고 **올린 위치를 돌려준다.**
+ * 답변이 나중에 수정되면 그 메시지를 찾아 고쳐야 하므로 ts 가 필요하다.
+ * 봇이 채널에 없으면 조용히 넘어간다.
+ */
 export async function postToBoard(
   client: WebClient,
   user: UserRow,
   blocks: KnownBlock[],
   text: string,
-): Promise<boolean> {
-  if (!user.board_channel_id || !user.share_to_board) return false;
+): Promise<{ channel: string; ts: string } | null> {
+  if (!user.board_channel_id || !user.share_to_board) return null;
   try {
-    await client.chat.postMessage({ channel: user.board_channel_id, blocks, text });
-    return true;
+    const res = await client.chat.postMessage({ channel: user.board_channel_id, blocks, text });
+    return res.ts ? { channel: user.board_channel_id, ts: res.ts } : null;
   } catch (err) {
     log.warn(`보드 채널 게시 실패 (${user.board_channel_id})`, err);
-    return false;
+    return null;
   }
 }
 
