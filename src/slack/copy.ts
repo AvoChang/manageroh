@@ -41,9 +41,9 @@ export const COPY = {
      */
     routineHeader: `:sunrise: 오늘의 모닝 루틴`,
     routine: [
-      'DM 에 아카이빙해 둔 자료 확인하기',
-      '오늘 할 일 정하기',
-      '`/출근` 찍고 시작하기',
+      '개인 DM 에 아카이빙한 자료들을 개인 캘린더에 입력하세요.',
+      '오늘 할 일을 정하세요.',
+      '`/출근` 을 찍고 시작하세요.',
     ] as readonly string[],
     /** 어제 봇 DM 에 쌓인 기록을 아침에 되짚어 준다 — 이게 "아카이브 확인" 이다 */
     doneHeader: (day: string) => `${day} 에 하신 일`,

@@ -12,6 +12,7 @@ import { streakBadge } from '../domain/streak.js';
 import { doClockIn, doClockOut } from '../service/attendanceFlow.js';
 import { resolveUser, todayFor } from '../service/context.js';
 import { publishHome } from '../service/home.js';
+import { planView } from '../service/plan.js';
 import { beginCheckin } from '../service/checkinFlow.js';
 import { beginStandup, isSubmitted } from '../service/standupFlow.js';
 import {
@@ -26,7 +27,6 @@ import {
   zonedToUtc,
   type Ymd,
 } from '../util/time.js';
-import { taskChecklist } from './blocks/checkin.js';
 import {
   actions,
   blocks,
@@ -209,11 +209,7 @@ export function registerCommands(app: App): void {
       await respond({
         response_type: 'ephemeral',
         text: '오늘 할 일',
-        blocks: blocks(
-          section(`*${formatKorean(today)} 할 일*`),
-          taskChecklist(tasksForDay(user.slack_user_id, today), new Map()),
-          context('`/done 내용` 처럼 적으면 바로 완료로 기록됩니다.'),
-        ),
+        blocks: blocks(...planView(user, today), context('`/done 내용` 처럼 적으면 바로 완료로 기록됩니다.')),
       });
       return;
     }
@@ -227,23 +223,10 @@ export function registerCommands(app: App): void {
   app.command(/^\/(plan|계획)$/, async ({ ack, command, client, respond }) => {
     await ack();
     const user = await resolveUser(client, command.user_id, command.team_id);
-    const today = todayFor(user);
-    const milestones = new Map(listMilestones(user.slack_user_id).map((m) => [m.id, m.title]));
-    const tasks = tasksForDay(user.slack_user_id, today);
-    const doneCount = tasks.filter((t) => t.status === 'done').length;
-
     await respond({
       response_type: 'ephemeral',
       text: '오늘 계획',
-      blocks: blocks(
-        section(`*${formatKorean(today)}* · ${doneCount}/${tasks.length} 완료`),
-        taskChecklist(tasks, milestones),
-        divider(),
-        actions([
-          button({ text: '할 일 추가·수정', actionId: ACTION.openCheckin, style: 'primary' }),
-          button({ text: '오늘 마무리하기', actionId: ACTION.openStandup }),
-        ]),
-      ),
+      blocks: planView(user, todayFor(user)),
     });
   });
 

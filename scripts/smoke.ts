@@ -206,6 +206,17 @@ completeCheckinSession(USER, WED);
 check('답하면 세션이 닫힌다', getCheckinSession(USER, WED)?.stage, 'complete');
 check('닫힌 뒤엔 열린 세션 없음', openCheckinSession(USER), undefined);
 
+console.log('\n── 할 일 체크 표시 ──');
+const { taskChecklist } = await import('../src/slack/blocks/checkin.js');
+const checkTasks = tasksForDay(USER, MON);
+const rendered = JSON.stringify(taskChecklist(checkTasks, new Map()));
+check('완료한 할 일은 체크 표시', rendered.includes('✅'), true);
+check('안 끝난 할 일은 빈 네모', rendered.includes('⬜️'), true);
+const allDone = checkTasks.map((t) => ({ ...t, status: 'done' as const }));
+const doneOnly = JSON.stringify(taskChecklist(allDone, new Map()));
+check('전부 완료면 빈 네모가 사라진다', doneOnly.includes('⬜️'), false);
+check('오버플로 메뉴가 완료 취소로 바뀐다', doneOnly.includes('완료 취소'), true);
+
 console.log('\n── 홈 탭 블록 ──');
 const { homeView } = await import('../src/slack/blocks/home.js');
 const { getStreak } = await import('../src/db/streaks.js');
@@ -252,7 +263,7 @@ check('아침에 어제 한 일이 보인다', morningText.includes('이력서 �
 check('아침에 오늘 할 일이 보인다', morningText.includes('사이트 뼈대 잡기'), true);
 check('아침에 나에게 한 말이 보인다', morningText.includes('오늘 잘했다'), true);
 check('아침에 마일스톤이 보인다', morningText.includes('포트폴리오 공개'), true);
-check('아침에 모닝 루틴이 보인다', morningText.includes('아카이빙해 둔 자료'), true);
+check('아침에 모닝 루틴이 보인다', morningText.includes('개인 캘린더에 입력'), true);
 check('모닝 루틴은 기록이 없어도 나온다',
   JSON.stringify(morningMessage({
     name: '테스터', workday: TUE, yesterday: null, todayPlan: [], carryOver: [],
