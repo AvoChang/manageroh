@@ -1,12 +1,9 @@
 import type { App } from '@slack/bolt';
 import { createMilestone, getMilestone, updateMilestone } from '../db/milestones.js';
-import { addTask, deleteTask, setTaskMilestone, tasksForDay } from '../db/tasks.js';
 import { updateUser } from '../db/users.js';
-import { resolveUser, todayFor } from '../service/context.js';
+import { resolveUser } from '../service/context.js';
 import { publishHome } from '../service/home.js';
-import { formatKorean } from '../util/time.js';
 import { log } from '../util/logger.js';
-import { TASK_SLOTS, type CheckinMeta } from './blocks/checkin.js';
 import type { MilestoneMeta } from './blocks/milestone.js';
 import { BLOCK, VIEW } from './ids.js';
 import { postDm } from './notify.js';
@@ -55,61 +52,6 @@ function parseMeta<T>(view: ViewLike): Partial<T> {
 }
 
 export function registerViews(app: App): void {
-  // ── 오늘 할 일 저장 ─────────────────────────────────────────────
-  app.view(VIEW.checkin, async ({ ack, body, view, client }) => {
-    await ack();
-    const user = await resolveUser(client, body.user.id, body.team?.id);
-    const meta = parseMeta<CheckinMeta>(view);
-    const workday = meta.workday ?? todayFor(user);
-
-    const titles: string[] = [];
-    for (let i = 0; i < TASK_SLOTS; i++) {
-      const raw = readValue(view, BLOCK.taskInput(i), BLOCK.taskAction(i))?.trim();
-      if (raw) titles.push(raw);
-    }
-
-    const rawMilestone = readValue(view, BLOCK.milestoneSelect, BLOCK.milestoneSelectAction);
-    const milestoneId = rawMilestone ? Number(rawMilestone) : null;
-
-    // 완료한 할 일은 손대지 않는다. 계획 상태인 것만 입력값에 맞춘다.
-    const existing = tasksForDay(user.slack_user_id, workday).filter((t) => t.status === 'planned');
-    const kept = new Set<string>();
-
-    for (const title of titles) {
-      const match = existing.find((t) => t.title === title);
-      if (match) {
-        kept.add(title);
-        if (milestoneId && !match.milestone_id) setTaskMilestone(match.id, milestoneId);
-        continue;
-      }
-      addTask({
-        userId: user.slack_user_id,
-        workday,
-        title,
-        milestoneId,
-        source: 'checkin',
-      });
-    }
-
-    for (const t of existing) {
-      if (!kept.has(t.title) && !titles.includes(t.title)) deleteTask(t.id);
-    }
-
-    await publishHome(client, user);
-    await postDm(
-      client,
-      user,
-      blocks(
-        section(
-          `*${formatKorean(workday)}* 할 일 ${titles.length}개를 등록했습니다.\n${titles
-            .map((t, i) => `${i + 1}. ${t}`)
-            .join('\n')}`,
-        ),
-      ),
-      '오늘 할 일을 등록했습니다.',
-    );
-  });
-
   // ── 마일스톤 생성 ───────────────────────────────────────────────
   app.view(VIEW.milestone, async ({ ack, body, view, client }) => {
     await ack();

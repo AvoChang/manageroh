@@ -82,6 +82,19 @@ CREATE TABLE IF NOT EXISTS standup_sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_open ON standup_sessions(user_id, stage);
 
+-- 오늘 할 일을 묻는 대화. done-next 와 같은 방식이지만 질문이 하나뿐이다.
+CREATE TABLE IF NOT EXISTS checkin_sessions (
+  user_id    TEXT NOT NULL,
+  workday    TEXT NOT NULL,
+  stage      TEXT NOT NULL,               -- ask | complete
+  channel_id TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, workday),
+  FOREIGN KEY (user_id) REFERENCES users(slack_user_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_checkin_open ON checkin_sessions(user_id, stage);
+
 -- 출근/퇴근. 하루에 한 행. 여러 번 찍으면 첫 출근~마지막 퇴근으로 본다.
 CREATE TABLE IF NOT EXISTS attendance (
   user_id        TEXT NOT NULL,

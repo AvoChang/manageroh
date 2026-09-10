@@ -1,4 +1,5 @@
 import type { App } from '@slack/bolt';
+import type { WebClient } from '@slack/web-api';
 import { listMilestones, updateMilestone } from '../db/milestones.js';
 import { getStandup } from '../db/standups.js';
 import { getStreak } from '../db/streaks.js';
@@ -11,6 +12,7 @@ import { streakBadge } from '../domain/streak.js';
 import { doClockIn, doClockOut } from '../service/attendanceFlow.js';
 import { resolveUser, todayFor } from '../service/context.js';
 import { publishHome } from '../service/home.js';
+import { beginCheckin } from '../service/checkinFlow.js';
 import { beginStandup, isSubmitted } from '../service/standupFlow.js';
 import {
   addDays,
@@ -24,21 +26,40 @@ import {
   zonedToUtc,
   type Ymd,
 } from '../util/time.js';
-import { checkinModal, taskChecklist } from './blocks/checkin.js';
+import { taskChecklist } from './blocks/checkin.js';
 import { actions, blocks, button, codeBlocks, context, divider, section } from './blocks/common.js';
 import { settingsModal } from './blocks/home.js';
 import { milestoneList, milestoneModal } from './blocks/milestone.js';
 import { COPY } from './copy.js';
 import { ACTION } from './ids.js';
-import { postToBoard } from './notify.js';
+import { postDm, postToBoard } from './notify.js';
+
+/**
+ * 명령 결과를 **DM 에 실제 메시지로** 남긴다.
+ *
+ * 임시(ephemeral) 응답은 새로고침하면 사라져서 "내가 뭘 기록했더라" 를 되짚을 수 없다.
+ * 기록성 명령(출근·퇴근·완료)은 대화에 쌓여야 한다.
+ * 채널에서 부른 경우에만 그 자리에도 짧게 알려 준다.
+ */
+async function record(
+  client: WebClient,
+  user: UserRow,
+  channelId: string,
+  text: string,
+  respond: (payload: { response_type: 'ephemeral'; text: string }) => Promise<unknown>,
+): Promise<void> {
+  await postDm(client, user, blocks(section(text)), text);
+  if (!channelId.startsWith('D')) {
+    await respond({ response_type: 'ephemeral', text });
+  }
+}
 
 export function registerCommands(app: App): void {
   // ── 출근 ────────────────────────────────────────────────────────
   app.command(/^\/(출근|in)$/, async ({ ack, command, client, respond }) => {
     await ack();
     const user = await resolveUser(client, command.user_id, command.team_id);
-    const message = doClockIn(user);
-    await respond({ response_type: 'ephemeral', text: message });
+    await record(client, user, command.channel_id, doClockIn(user), respond);
     await publishHome(client, user);
   });
 
@@ -46,8 +67,7 @@ export function registerCommands(app: App): void {
   app.command(/^\/(퇴근|out)$/, async ({ ack, command, client, respond }) => {
     await ack();
     const user = await resolveUser(client, command.user_id, command.team_id);
-    const message = doClockOut(user);
-    await respond({ response_type: 'ephemeral', text: message });
+    await record(client, user, command.channel_id, doClockOut(user), respond);
     await publishHome(client, user);
   });
 
@@ -110,20 +130,15 @@ export function registerCommands(app: App): void {
   });
 
   // ── 오늘 할 일 정하기 ───────────────────────────────────────────
-  app.command(/^\/(checkin|체크인)$/, async ({ ack, command, client }) => {
+  // 모달이 아니라 DM 대화다. 질문·답변·확인이 전부 대화 기록으로 남아야 하기 때문이다.
+  app.command(/^\/(checkin|체크인|할일)$/, async ({ ack, command, client, respond }) => {
     await ack();
     const user = await resolveUser(client, command.user_id, command.team_id);
-    const today = todayFor(user);
-    await client.views.open({
-      trigger_id: command.trigger_id,
-      view: checkinModal({
-        workday: today,
-        existing: tasksForDay(user.slack_user_id, today),
-        carryOver: openTasksBefore(user.slack_user_id, today),
-        milestones: listMilestones(user.slack_user_id, 'active'),
-        responseChannel: command.channel_id,
-      }),
-    });
+    const inDm = command.channel_id.startsWith('D');
+    await beginCheckin(client, user, todayFor(user), inDm ? command.channel_id : undefined);
+    if (!inDm) {
+      await respond({ response_type: 'ephemeral', text: 'DM 으로 여쭤봤습니다.' });
+    }
   });
 
   // ── 방금 끝낸 일 기록 ───────────────────────────────────────────
@@ -147,7 +162,7 @@ export function registerCommands(app: App): void {
     }
 
     addTask({ userId: user.slack_user_id, workday: today, title, status: 'done', source: 'done' });
-    await respond({ response_type: 'ephemeral', text: `✅ 기록했습니다 — ${title}` });
+    await record(client, user, command.channel_id, `✅ 완료 — ${title}`, respond);
     await publishHome(client, user);
   });
 

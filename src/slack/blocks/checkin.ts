@@ -1,94 +1,78 @@
-import type { KnownBlock, ModalView, PlainTextOption } from '@slack/types';
+import type { KnownBlock } from '@slack/types';
 import type { MilestoneRow, TaskRow } from '../../db/types.js';
 import { formatKorean, type Ymd } from '../../util/time.js';
-import { ACTION, BLOCK, VIEW } from '../ids.js';
+import { ACTION } from '../ids.js';
 import { context, escapeMrkdwn, section, truncate } from './common.js';
 
-export const TASK_SLOTS = 3;
+/** 권장 개수. 강제하지는 않는다 — 더 적어도, 더 많아도 받는다. */
+export const SUGGESTED_TASKS = 3;
 
-export interface CheckinMeta {
+/**
+ * 오늘 할 일을 묻는 메시지.
+ *
+ * 예전에는 입력칸 3개짜리 모달이었다. 모달은 제출하면 사라져서 **대화에 기록이 안 남고**,
+ * 내가 뭘 적었는지 나중에 다시 볼 방법이 없다. done-next 와 같은 이유로 대화로 바꿨다.
+ */
+export function checkinPrompt(opts: {
   workday: Ymd;
-  /** 응답을 돌려보낼 채널 (DM 이면 DM 채널 id) */
-  responseChannel?: string;
-}
-
-export function checkinModal(opts: {
-  workday: Ymd;
-  existing: TaskRow[];
   carryOver: TaskRow[];
   milestones: MilestoneRow[];
-  responseChannel?: string;
-}): ModalView {
-  const prefill = [...opts.existing.map((t) => t.title)];
-  for (const t of opts.carryOver) if (prefill.length < TASK_SLOTS) prefill.push(t.title);
-
+}): KnownBlock[] {
   const body: KnownBlock[] = [
     section(
-      `*${formatKorean(opts.workday)}* 의 할 일을 적어 주세요.\n하루에 세 개면 충분합니다. 다 못 채워도 괜찮습니다.`,
+      `*${formatKorean(opts.workday)}* 오늘 할 일을 알려 주세요.\n` +
+        `한 줄에 하나씩, ${SUGGESTED_TASKS}개 정도면 충분합니다. 다 못 채워도 괜찮습니다.`,
     ),
   ];
 
   if (opts.carryOver.length > 0) {
     body.push(
-      context(
-        `어제 못 끝낸 것 ${opts.carryOver.length}개를 미리 채워 뒀습니다 — 지울 것은 지우세요.`,
+      section(
+        `*아직 안 끝난 할 일* — 이어서 하실 것은 그대로 적어 주세요.\n${opts.carryOver
+          .slice(0, 5)
+          .map((t) => `• ${escapeMrkdwn(t.title)}`)
+          .join('\n')}`,
       ),
     );
   }
 
-  for (let i = 0; i < TASK_SLOTS; i++) {
-    body.push({
-      type: 'input',
-      block_id: BLOCK.taskInput(i),
-      optional: i > 0,
-      label: { type: 'plain_text', text: `할 일 ${i + 1}`, emoji: true },
-      element: {
-        type: 'plain_text_input',
-        action_id: BLOCK.taskAction(i),
-        max_length: 200,
-        ...(prefill[i] ? { initial_value: truncate(prefill[i]!, 200) } : {}),
-        placeholder: {
-          type: 'plain_text',
-          text: i === 0 ? '예: 이력서 경력 부분 다시 쓰기' : '(비워 두어도 됩니다)',
-        },
-      },
-    });
-  }
-
   if (opts.milestones.length > 0) {
-    body.push({
-      type: 'input',
-      block_id: BLOCK.milestoneSelect,
-      optional: true,
-      label: { type: 'plain_text', text: '어느 마일스톤을 향한 일인가요?', emoji: true },
-      hint: { type: 'plain_text', text: '고르면 마일스톤 진행도에 자동으로 반영됩니다.' },
-      element: {
-        type: 'static_select',
-        action_id: BLOCK.milestoneSelectAction,
-        placeholder: { type: 'plain_text', text: '선택 안 함' },
-        options: milestoneOptions(opts.milestones),
-      },
-    });
+    body.push(
+      context(
+        `🎯 마일스톤에 연결하려면 줄 끝에 \`#번호\` 를 붙이세요 — ${opts.milestones
+          .slice(0, 5)
+          .map((m) => `\`#${m.id}\` ${truncate(m.title, 20)}`)
+          .join(' · ')}`,
+      ),
+    );
   }
 
-  const meta: CheckinMeta = { workday: opts.workday, responseChannel: opts.responseChannel };
-
-  return {
-    type: 'modal',
-    callback_id: VIEW.checkin,
-    private_metadata: JSON.stringify(meta),
-    title: { type: 'plain_text', text: '오늘의 출근', emoji: true },
-    submit: { type: 'plain_text', text: '시작하기' },
-    close: { type: 'plain_text', text: '나중에' },
-    blocks: body,
-  };
+  return body;
 }
 
-export function milestoneOptions(milestones: MilestoneRow[]): PlainTextOption[] {
-  return milestones.slice(0, 100).map((m) => ({
-    text: { type: 'plain_text' as const, text: truncate(m.title, 75), emoji: true },
-    value: String(m.id),
-  }));
+/** 저장한 뒤 그대로 되읽어 준다 — 무엇이 기록됐는지 대화에 남는다 */
+export function checkinConfirm(opts: {
+  workday: Ymd;
+  tasks: TaskRow[];
+  milestoneNames: Map<number, string>;
+}): KnownBlock[] {
+  if (opts.tasks.length === 0) {
+    return [
+      section(
+        `*${formatKorean(opts.workday)}* 할 일을 비웠습니다.\n생각나면 \`/checkin\` 으로 다시 알려 주세요.`,
+      ),
+    ];
+  }
+
+  const lines = opts.tasks.map((t, i) => {
+    const ms = t.milestone_id ? opts.milestoneNames.get(t.milestone_id) : undefined;
+    return `${i + 1}. ${escapeMrkdwn(t.title)}${ms ? `  🎯 ${escapeMrkdwn(truncate(ms, 24))}` : ''}`;
+  });
+
+  return [
+    section(`*${formatKorean(opts.workday)}* 할 일 ${opts.tasks.length}개를 등록했습니다.\n${lines.join('\n')}`),
+    context('다시 적으면 오늘 목록이 이걸로 바뀝니다. 완료 처리는 `/plan` 이나 홈 탭에서.'),
+  ];
 }
 
 /** 오늘의 할 일 체크리스트 (홈 탭 · /plan 공용) */

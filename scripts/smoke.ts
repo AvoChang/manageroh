@@ -144,6 +144,38 @@ check('수정하면 9시간 - 점심 90분', fixed.worked_minutes, 450);
 check('수정하면 자동 마감 해제', fixed.auto_closed, 0);
 check('KST 09:30 은 UTC 00:30', kst(FRI, '09:30').toISOString(), '2026-09-11T00:30:00.000Z');
 
+console.log('\n── 체크인 대화 ──');
+const { startCheckinSession, openCheckinSession, getCheckinSession } = await import('../src/db/checkins.js');
+const { checkinPrompt, checkinConfirm } = await import('../src/slack/blocks/checkin.js');
+
+startCheckinSession(USER, WED, 'D_TEST');
+check('체크인 세션이 열린다', openCheckinSession(USER)?.stage, 'ask');
+
+// handleCheckinAnswer 의 저장 규칙을 그대로 따라 해 본다 (슬랙 호출 없이)
+const { deleteTask: dropTask } = await import('../src/db/tasks.js');
+for (const t of tasksForDay(USER, WED)) if (t.status === 'planned') dropTask(t.id);
+addTask({ userId: USER, workday: WED, title: '이력서 다시 쓰기', milestoneId: ms.id, source: 'checkin' });
+addTask({ userId: USER, workday: WED, title: '인강 3강', source: 'checkin' });
+const savedTasks = tasksForDay(USER, WED).filter((t) => t.status !== 'done');
+check('할 일 2개 저장', savedTasks.length, 2);
+
+const promptText = JSON.stringify(
+  checkinPrompt({ workday: WED, carryOver: [], milestones: [ms] }),
+);
+check('질문에 마일스톤 연결법 안내', promptText.includes('#번호'), true);
+check('질문이 모달이 아니라 블록 배열', Array.isArray(checkinPrompt({ workday: WED, carryOver: [], milestones: [] })), true);
+
+const confirmText = JSON.stringify(
+  checkinConfirm({ workday: WED, tasks: savedTasks, milestoneNames: new Map([[ms.id, ms.title]]) }),
+);
+check('확인 메시지에 저장 내용이 그대로 보인다', confirmText.includes('이력서 다시 쓰기'), true);
+check('확인 메시지에 마일스톤 이름', confirmText.includes('포트폴리오 공개'), true);
+
+const { completeCheckinSession } = await import('../src/db/checkins.js');
+completeCheckinSession(USER, WED);
+check('답하면 세션이 닫힌다', getCheckinSession(USER, WED)?.stage, 'complete');
+check('닫힌 뒤엔 열린 세션 없음', openCheckinSession(USER), undefined);
+
 console.log('\n── 홈 탭 블록 ──');
 const { homeView } = await import('../src/slack/blocks/home.js');
 const { getStreak } = await import('../src/db/streaks.js');

@@ -1,5 +1,7 @@
 import type { App } from '@slack/bolt';
+import { openCheckinSession } from '../db/checkins.js';
 import { openSession } from '../db/standups.js';
+import { beginCheckin, handleCheckinAnswer } from '../service/checkinFlow.js';
 import { doClockIn, doClockOut } from '../service/attendanceFlow.js';
 import { rememberBoardChannel, resolveUser, todayFor } from '../service/context.js';
 import { publishHome } from '../service/home.js';
@@ -26,6 +28,7 @@ const CLOCK_IN_WORDS = /^(출근|출근합니다|출근이요|in)$/i;
 const CLOCK_OUT_WORDS = /^(퇴근|퇴근합니다|퇴근이요|out)$/i;
 const HELP_WORDS = /^(도움말|help|\?)$/i;
 const STANDUP_WORDS = /^(마무리|done-next|donenext|보고)$/i;
+const CHECKIN_WORDS = /^(할일|할 일|체크인|checkin)$/i;
 
 export function registerEvents(app: App): void {
   // ── DM 메시지 = done-next 대화의 답변 ───────────────────────────
@@ -54,16 +57,30 @@ export function registerEvents(app: App): void {
       return;
     }
 
-    // 진행 중인 done-next 대화가 있으면 그 답으로 받는다.
-    const session = openSession(user.slack_user_id);
-    if (session) {
-      await handleStandupAnswer(client, user, session, text);
+    // 진행 중인 대화가 있으면 그 답으로 받는다.
+    // 체크인(아침)과 done-next(저녁)가 둘 다 열려 있으면 **나중에 시작된 쪽**이 이긴다.
+    const standup = openSession(user.slack_user_id);
+    const checkin = openCheckinSession(user.slack_user_id);
+    const standupWins =
+      standup !== undefined && (checkin === undefined || standup.started_at >= checkin.started_at);
+
+    if (standup && standupWins) {
+      await handleStandupAnswer(client, user, standup, text);
+      await publishHome(client, user);
+      return;
+    }
+    if (checkin) {
+      await handleCheckinAnswer(client, user, checkin, text);
       await publishHome(client, user);
       return;
     }
 
     if (STANDUP_WORDS.test(text)) {
       await beginStandup(client, user, todayFor(user), m.channel);
+      return;
+    }
+    if (CHECKIN_WORDS.test(text)) {
+      await beginCheckin(client, user, todayFor(user), m.channel);
       return;
     }
 
@@ -83,7 +100,7 @@ export function registerEvents(app: App): void {
           button({ text: '오늘 할 일 정하기', actionId: ACTION.openCheckin }),
           button({ text: '오늘 보고서', actionId: `${ACTION.reportPeriod}_today`, value: 'today' }),
         ]),
-        context('`출근` · `퇴근` 이라고 적으면 근무 기록이 남습니다.'),
+        context('`출근` · `퇴근` · `할일` 이라고 적어도 동작합니다.'),
       ),
     });
   });

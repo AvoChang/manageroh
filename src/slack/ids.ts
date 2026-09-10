@@ -4,7 +4,6 @@
  * 드러나고 오류가 안 뜬다 — 그래서 문자열을 흩뿌리지 않는다.
  */
 export const VIEW = {
-  checkin: 'view_checkin',
   milestone: 'view_milestone',
   milestoneEdit: 'view_milestone_edit',
   settings: 'view_settings',
@@ -27,10 +26,6 @@ export const ACTION = {
 } as const;
 
 export const BLOCK = {
-  taskInput: (n: number) => `blk_task_${n}`,
-  taskAction: (n: number) => `act_task_${n}`,
-  milestoneSelect: 'blk_milestone_select',
-  milestoneSelectAction: 'act_milestone_select',
   msTitle: 'blk_ms_title',
   msTitleAction: 'act_ms_title',
   msDesc: 'blk_ms_desc',

@@ -13,6 +13,7 @@ import { closeDanglingSessions } from '../service/attendanceFlow.js';
 import { publishHome } from '../service/home.js';
 import { beginStandup } from '../service/standupFlow.js';
 import { getAttendance } from '../db/attendance.js';
+import { abandonStaleCheckins } from '../db/checkins.js';
 import { boardOpener, boardWrapup } from '../slack/blocks/board.js';
 import { COPY } from '../slack/copy.js';
 import { blocks, codeBlocks, context, section } from '../slack/blocks/common.js';
@@ -233,6 +234,7 @@ async function runMaintenance(client: WebClient): Promise<void> {
   }
 
   abandonStaleSessions(addDays(today, -2));
+  abandonStaleCheckins(addDays(today, -2));
   pruneJobRuns(addDays(today, -90));
   log.info('일일 정리 완료');
 }

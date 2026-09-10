@@ -15,10 +15,10 @@ import { buildReport, rangeFor, type ReportPeriod } from '../domain/report.js';
 import { doClockIn, doClockOut } from '../service/attendanceFlow.js';
 import { resolveUser, todayFor } from '../service/context.js';
 import { publishHome } from '../service/home.js';
+import { beginCheckin } from '../service/checkinFlow.js';
 import { beginStandup } from '../service/standupFlow.js';
 import { addDays, formatKorean } from '../util/time.js';
 import { log } from '../util/logger.js';
-import { checkinModal } from './blocks/checkin.js';
 import { blocks, codeBlocks, context, section } from './blocks/common.js';
 import { settingsModal } from './blocks/home.js';
 import { milestoneList, milestoneModal } from './blocks/milestone.js';
@@ -33,25 +33,21 @@ interface ActionBody {
   actions?: { action_id: string; value?: string; selected_option?: { value: string } }[];
 }
 
-/** 메시지에서 온 액션이면 그 자리에 임시 응답, 홈 탭에서 온 것이면 DM 으로 */
+/**
+ * 액션 결과를 **새 메시지로** 남긴다.
+ *
+ * 예전에는 `response_url` 로 답했는데, 슬랙은 그 응답으로 **원본 메시지를 교체**한다.
+ * 아침 리마인드에서 "출근" 을 누르면 그 리마인드가 통째로 사라졌다.
+ * 기록은 지워지는 게 아니라 쌓여야 한다 — 그래서 항상 DM 에 새 메시지를 붙인다.
+ */
 async function reply(
   client: WebClient,
   user: UserRow,
-  body: ActionBody,
+  _body: ActionBody,
   text: string,
   blockList?: KnownBlock[],
 ): Promise<void> {
-  const url = body.response_url;
-  const payload = blockList ?? blocks(section(text));
-  if (url) {
-    await fetch(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ response_type: 'ephemeral', text, blocks: payload }),
-    });
-    return;
-  }
-  await postDm(client, user, payload, text);
+  await postDm(client, user, blockList ?? blocks(section(text)), text);
 }
 
 function actionValue(body: ActionBody): string {
@@ -85,22 +81,12 @@ export function registerActions(app: App): void {
     await beginStandup(client, user, todayFor(user));
   });
 
-  // ── 오늘 할 일 모달 ─────────────────────────────────────────────
+  // ── 오늘 할 일 (모달 아님 — DM 대화) ────────────────────────────
   app.action(ACTION.openCheckin, async ({ ack, body, client }) => {
     await ack();
     const b = body as unknown as ActionBody;
-    if (!b.trigger_id) return;
     const user = await resolveUser(client, b.user.id, b.team?.id);
-    const today = todayFor(user);
-    await client.views.open({
-      trigger_id: b.trigger_id,
-      view: checkinModal({
-        workday: today,
-        existing: tasksForDay(user.slack_user_id, today),
-        carryOver: openTasksBefore(user.slack_user_id, today),
-        milestones: listMilestones(user.slack_user_id, 'active'),
-      }),
-    });
+    await beginCheckin(client, user, todayFor(user));
   });
 
   // ── 어제 것 그대로 이어서 ───────────────────────────────────────
