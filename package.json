@@ -1,0 +1,32 @@
+{
+  "name": "worklife-bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "슬랙 채널을 직장처럼 만들어 주는 업무 리듬 봇",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "smoke": "tsx scripts/smoke.ts",
+    "channels": "tsx scripts/list-channels.ts",
+    "verify-home": "tsx scripts/verify-home.ts"
+  },
+  "dependencies": {
+    "@slack/bolt": "^4.2.0",
+    "@slack/types": "^2.14.0",
+    "@slack/web-api": "^7.8.0",
+    "better-sqlite3": "^11.7.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

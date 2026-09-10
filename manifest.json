@@ -1,0 +1,68 @@
+{
+  "display_information": {
+    "name": "업무 리듬",
+    "description": "매일 묻고 기록해서 일의 리듬을 지켜 주는 봇",
+    "background_color": "#2c2d30",
+    "long_description": "매일 아침에는 어제 하기로 한 일을 다시 알려 드리고, 저녁에는 오늘 무엇을 했고 내일은 무엇을 할지 순서대로 여쭙습니다. 출근과 퇴근을 찍으면 휴게시간을 뺀 근무시간이 자동으로 계산되고, 쌓인 답변은 주간·월간 업무보고와 마일스톤 진행도로 돌아옵니다. 연속 기록과 공개 보드 채널이 매일 나오던 질문의 자리를 대신 채웁니다. 퇴직했거나 혼자 일하게 된 사람이 직장에 다닐 때의 리듬을 그대로 유지하도록 돕는 것이 이 앱의 목적입니다."
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "업무 리듬",
+      "always_online": true
+    },
+    "app_home": {
+      "home_tab_enabled": true,
+      "messages_tab_enabled": true,
+      "messages_tab_read_only_enabled": false
+    },
+    "slash_commands": [
+      { "command": "/출근", "description": "근무 시작을 기록합니다", "should_escape": false },
+      { "command": "/퇴근", "description": "근무 종료를 기록하고 오늘 근무시간을 계산합니다", "should_escape": false },
+      { "command": "/근무", "description": "근무시간 조회·정정", "usage_hint": "[수정 [YYYY-MM-DD] <출근> <퇴근>]", "should_escape": false },
+      { "command": "/in", "description": "근무 시작 (출근)", "should_escape": false },
+      { "command": "/out", "description": "근무 종료 (퇴근)", "should_escape": false },
+      { "command": "/hours", "description": "근무시간 조회·정정", "usage_hint": "[수정 [YYYY-MM-DD] <출근> <퇴근>]", "should_escape": false },
+      { "command": "/standup", "description": "done-next 회고를 지금 시작합니다", "usage_hint": "[다시]", "should_escape": false },
+      { "command": "/checkin", "description": "오늘 할 일을 정합니다", "should_escape": false },
+      { "command": "/done", "description": "방금 끝낸 일을 기록합니다", "usage_hint": "<내용>", "should_escape": false },
+      { "command": "/plan", "description": "오늘 할 일 목록을 봅니다", "should_escape": false },
+      { "command": "/milestone", "description": "마일스톤 만들기·진행도", "usage_hint": "[new|progress <번호> <%>|done <번호>]", "should_escape": false },
+      { "command": "/report", "description": "업무보고를 만듭니다", "usage_hint": "[today|week|month] [공유]", "should_escape": false },
+      { "command": "/streak", "description": "연속 기록을 봅니다", "should_escape": false },
+      { "command": "/pause", "description": "휴가 — 그동안 묻지 않고 연속 기록도 지켜 줍니다", "usage_hint": "<일수|YYYY-MM-DD|해제>", "should_escape": false },
+      { "command": "/settings", "description": "시간·타임존·공유 채널 설정", "should_escape": false },
+      { "command": "/help", "description": "사용법", "should_escape": false }
+    ]
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": [
+        "commands",
+        "chat:write",
+        "im:write",
+        "im:history",
+        "im:read",
+        "users:read",
+        "channels:read",
+        "groups:read",
+        "app_mentions:read"
+      ]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "bot_events": [
+        "app_home_opened",
+        "app_mention",
+        "member_joined_channel",
+        "message.im"
+      ]
+    },
+    "interactivity": {
+      "is_enabled": true
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": true,
+    "token_rotation_enabled": false
+  }
+}
