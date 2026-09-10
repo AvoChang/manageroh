@@ -242,6 +242,36 @@ startCheckinSession(USER, EDIT_DAY, 'D_TEST');
 completeCheckinSession(USER, EDIT_DAY, '1757000004.000400');
 check('체크인 답변도 ts 로 찾는다', findCheckinByAnswerTs(USER, '1757000004.000400')?.workday, EDIT_DAY);
 
+console.log('\n── 오후 중간 점검 ──');
+const { applyProgressUpdate } = await import('../src/service/middayFlow.js');
+const { startMiddaySession, openMiddaySession, completeMiddaySession } = await import('../src/db/middays.js');
+
+const MID = '2026-09-16';
+addTask({ userId: USER, workday: MID, title: '인강 3강', source: 'checkin' });
+addTask({ userId: USER, workday: MID, title: '기출 2회분 채점', source: 'checkin' });
+addTask({ userId: USER, workday: MID, title: '이력서 문장 다듬기', source: 'checkin' });
+
+const r1 = applyProgressUpdate(user0, MID, '인강 3강');
+check('정확히 같은 이름은 완료 처리', r1.completed, ['인강 3강']);
+check('새로 추가된 것 없음', r1.added, []);
+
+const r2 = applyProgressUpdate(user0, MID, '기출');
+check('일부만 적어도 후보가 하나면 매칭', r2.completed, ['기출 2회분 채점']);
+
+const r3 = applyProgressUpdate(user0, MID, '동네 도서관 등록');
+check('계획에 없던 일은 새로 기록', r3.added, ['동네 도서관 등록']);
+check('완료 4건 (계획 2 + 새 1 … 남은 계획 1)',
+  tasksForDay(USER, MID).filter((t) => t.status === 'done').length, 3);
+
+const r4 = applyProgressUpdate(user0, MID, '동네 도서관 등록');
+check('같은 내용을 다시 반영해도 중복 안 쌓임', r4.added, []);
+check('할 일 총 개수 그대로', tasksForDay(USER, MID).length, 4);
+
+startMiddaySession(USER, MID, 'D_TEST');
+check('중간 점검 세션이 열린다', openMiddaySession(USER)?.stage, 'ask');
+completeMiddaySession(USER, MID);
+check('닫으면 열린 세션 없음', openMiddaySession(USER), undefined);
+
 console.log('\n── 할 일 체크 표시 ──');
 const { taskChecklist } = await import('../src/slack/blocks/checkin.js');
 const checkTasks = tasksForDay(USER, MON);

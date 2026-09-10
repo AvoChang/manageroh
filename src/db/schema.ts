@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS users (
   work_days        TEXT NOT NULL,              -- '1,2,3,4,5'
   checkin_time     TEXT NOT NULL,              -- 'HH:MM' 아침 리마인드
   standup_time     TEXT NOT NULL,              -- 'HH:MM' done-next 시작
+  midday_time      TEXT NOT NULL DEFAULT '15:00', -- 'HH:MM' 중간 점검
+  midday_reminder  INTEGER NOT NULL DEFAULT 1,
   nudge_time       TEXT NOT NULL,              -- 'HH:MM' 미응답 넛지
   weekly_time      TEXT NOT NULL,              -- 금요일 주간보고
   dm_channel_id    TEXT,
@@ -103,6 +105,20 @@ CREATE TABLE IF NOT EXISTS checkin_sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_checkin_open ON checkin_sessions(user_id, stage);
 
+-- 오후 중간 점검. 답이 없으면 done-next 가 시작될 때 알아서 닫힌다.
+CREATE TABLE IF NOT EXISTS midday_sessions (
+  user_id    TEXT NOT NULL,
+  workday    TEXT NOT NULL,
+  stage      TEXT NOT NULL,               -- ask | complete
+  channel_id TEXT NOT NULL,
+  answer_ts  TEXT,
+  started_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, workday),
+  FOREIGN KEY (user_id) REFERENCES users(slack_user_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_midday_open ON midday_sessions(user_id, stage);
+
 -- 출근/퇴근. 하루에 한 행. 여러 번 찍으면 첫 출근~마지막 퇴근으로 본다.
 CREATE TABLE IF NOT EXISTS attendance (
   user_id        TEXT NOT NULL,
@@ -155,4 +171,7 @@ export const MIGRATIONS: string[] = [
   `ALTER TABLE standups ADD COLUMN board_channel TEXT`,
   `ALTER TABLE standups ADD COLUMN board_ts TEXT`,
   `ALTER TABLE checkin_sessions ADD COLUMN answer_ts TEXT`,
+  // 오후 중간 점검 (2026-09-10).
+  `ALTER TABLE users ADD COLUMN midday_time TEXT NOT NULL DEFAULT '15:00'`,
+  `ALTER TABLE users ADD COLUMN midday_reminder INTEGER NOT NULL DEFAULT 1`,
 ];

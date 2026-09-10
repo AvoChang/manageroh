@@ -1,11 +1,13 @@
 import type { WebClient } from '@slack/web-api';
 import { findCheckinByAnswerTs } from '../db/checkins.js';
+import { findMiddayByAnswerTs } from '../db/middays.js';
 import { findByAnswerTs, getStandup, saveAnswer } from '../db/standups.js';
 import type { UserRow } from '../db/types.js';
 import { formatKorean } from '../util/time.js';
 import { log } from '../util/logger.js';
 import { blocks, context, section } from '../slack/blocks/common.js';
 import { saveCheckinTasks } from './checkinFlow.js';
+import { applyProgressUpdate } from './middayFlow.js';
 import { buildBoardBlocks, syncNextDayTasks } from './standupFlow.js';
 
 const FIELD_LABEL = {
@@ -56,6 +58,24 @@ export async function applyMessageEdit(
           `${formatKorean(row.workday)}` +
             (field === 'next_text' ? ' · 다음 근무일 할 일도 다시 만들었습니다.' : '') +
             (boardFixed ? ' · 채널 요약도 고쳤습니다.' : ''),
+        ),
+      ),
+      text: '수정한 내용을 반영했습니다.',
+    });
+    return true;
+  }
+
+  const midday = findMiddayByAnswerTs(user.slack_user_id, messageTs);
+  if (midday) {
+    const result = applyProgressUpdate(user, midday.workday, text);
+    await client.chat.postMessage({
+      channel,
+      blocks: blocks(
+        section(':pencil2: 수정한 내용으로 진행 현황을 다시 반영했습니다.'),
+        context(
+          `${formatKorean(midday.workday)} · 완료 ${result.completed.length}건` +
+            (result.added.length > 0 ? ` · 새로 기록 ${result.added.length}건` : '') +
+            ' · 이미 완료된 것은 그대로 둡니다.',
         ),
       ),
       text: '수정한 내용을 반영했습니다.',

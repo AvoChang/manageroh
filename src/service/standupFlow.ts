@@ -9,6 +9,7 @@ import {
   setStage,
   startSession,
 } from '../db/standups.js';
+import { completeMiddaySession } from '../db/middays.js';
 import { addTask, clearStandupTasks } from '../db/tasks.js';
 import type { StandupRow, StandupSessionRow, UserRow } from '../db/types.js';
 import { formatDuration, minutesSoFar } from '../domain/attendance.js';
@@ -48,6 +49,8 @@ export async function beginStandup(
   }
 
   startSession(user.slack_user_id, workday, channel);
+  // 오후 중간 점검에 답을 안 했으면 여기서 알아서 닫는다 — 이제부터 답은 회고의 것이다.
+  completeMiddaySession(user.slack_user_id, workday);
 
   const name = user.display_name || '동료';
   await client.chat.postMessage({

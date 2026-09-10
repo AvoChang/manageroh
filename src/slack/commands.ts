@@ -14,6 +14,7 @@ import { resolveUser, todayFor } from '../service/context.js';
 import { publishHome } from '../service/home.js';
 import { planView } from '../service/plan.js';
 import { beginCheckin } from '../service/checkinFlow.js';
+import { beginMidday } from '../service/middayFlow.js';
 import { beginStandup, isSubmitted } from '../service/standupFlow.js';
 import {
   addDays,
@@ -196,6 +197,15 @@ export function registerCommands(app: App): void {
     if (!inDm) {
       await respond({ response_type: 'ephemeral', text: 'DM 으로 여쭤봤습니다.' });
     }
+  });
+
+  // ── 중간 점검 지금 시작 ─────────────────────────────────────────
+  app.command(/^\/(progress|중간보고|현황)$/, async ({ ack, command, client, respond }) => {
+    await ack();
+    const user = await resolveUser(client, command.user_id, command.team_id);
+    const inDm = command.channel_id.startsWith('D');
+    await beginMidday(client, user, todayFor(user), inDm ? command.channel_id : undefined);
+    if (!inDm) await respond({ response_type: 'ephemeral', text: 'DM 으로 여쭤봤습니다.' });
   });
 
   // ── 방금 끝낸 일 기록 ───────────────────────────────────────────

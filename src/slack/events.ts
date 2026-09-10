@@ -1,9 +1,11 @@
 import type { App } from '@slack/bolt';
 import type { WebClient } from '@slack/web-api';
 import { openCheckinSession } from '../db/checkins.js';
+import { openMiddaySession } from '../db/middays.js';
 import { openSession } from '../db/standups.js';
 import { beginCheckin, handleCheckinAnswer } from '../service/checkinFlow.js';
 import { applyMessageEdit } from '../service/edits.js';
+import { beginMidday, handleMiddayAnswer } from '../service/middayFlow.js';
 import { doClockIn, doClockOut } from '../service/attendanceFlow.js';
 import { rememberBoardChannel, resolveUser, todayFor } from '../service/context.js';
 import { publishHome } from '../service/home.js';
@@ -34,6 +36,7 @@ const CLOCK_OUT_WORDS = /^(퇴근|퇴근합니다|퇴근이요|out)$/i;
 const HELP_WORDS = /^(도움말|help|\?)$/i;
 const STANDUP_WORDS = /^(마무리|done-next|donenext|보고)$/i;
 const CHECKIN_WORDS = /^(할일|할 일|체크인|checkin)$/i;
+const MIDDAY_WORDS = /^(중간보고|중간 보고|현황|progress)$/i;
 
 export function registerEvents(app: App): void {
   // ── DM 메시지 = done-next 대화의 답변 ───────────────────────────
@@ -70,19 +73,20 @@ export function registerEvents(app: App): void {
     }
 
     // 진행 중인 대화가 있으면 그 답으로 받는다.
-    // 체크인(아침)과 done-next(저녁)가 둘 다 열려 있으면 **나중에 시작된 쪽**이 이긴다.
+    // 체크인(아침)·중간 점검(오후)·done-next(저녁)가 겹치면 **나중에 시작된 쪽**이 이긴다.
     const standup = openSession(user.slack_user_id);
     const checkin = openCheckinSession(user.slack_user_id);
-    const standupWins =
-      standup !== undefined && (checkin === undefined || standup.started_at >= checkin.started_at);
+    const midday = openMiddaySession(user.slack_user_id);
+    const latest = [
+      standup && { at: standup.started_at, run: () => handleStandupAnswer(client, user, standup, text, m.ts) },
+      midday && { at: midday.started_at, run: () => handleMiddayAnswer(client, user, midday, text, m.ts) },
+      checkin && { at: checkin.started_at, run: () => handleCheckinAnswer(client, user, checkin, text, m.ts) },
+    ]
+      .filter((c): c is { at: string; run: () => Promise<void> } => Boolean(c))
+      .sort((a, b) => (a.at < b.at ? 1 : -1))[0];
 
-    if (standup && standupWins) {
-      await handleStandupAnswer(client, user, standup, text, m.ts);
-      await publishHome(client, user);
-      return;
-    }
-    if (checkin) {
-      await handleCheckinAnswer(client, user, checkin, text, m.ts);
+    if (latest) {
+      await latest.run();
       await publishHome(client, user);
       return;
     }
@@ -93,6 +97,10 @@ export function registerEvents(app: App): void {
     }
     if (CHECKIN_WORDS.test(text)) {
       await beginCheckin(client, user, todayFor(user), m.channel);
+      return;
+    }
+    if (MIDDAY_WORDS.test(text)) {
+      await beginMidday(client, user, todayFor(user), m.channel);
       return;
     }
 

@@ -1,76 +1,12 @@
-import { db, nowIso } from './index.js';
+import { makeSessionStore, type SessionRow } from './sessionStore.js';
 
-export interface CheckinSessionRow {
-  user_id: string;
-  workday: string;
-  stage: 'ask' | 'complete';
-  channel_id: string;
-  answer_ts: string | null;
-  started_at: string;
-  updated_at: string;
-}
+export type CheckinSessionRow = SessionRow;
 
-export function getCheckinSession(userId: string, workday: string): CheckinSessionRow | undefined {
-  return db()
-    .prepare<[string, string], CheckinSessionRow>(
-      'SELECT * FROM checkin_sessions WHERE user_id = ? AND workday = ?',
-    )
-    .get(userId, workday);
-}
+const store = makeSessionStore('checkin_sessions');
 
-/** 아직 답을 기다리는 중인 세션 (날짜 무관 — 자정을 넘겨 답해도 이어진다) */
-export function openCheckinSession(userId: string): CheckinSessionRow | undefined {
-  return db()
-    .prepare<[string], CheckinSessionRow>(
-      `SELECT * FROM checkin_sessions
-       WHERE user_id = ? AND stage != 'complete'
-       ORDER BY workday DESC LIMIT 1`,
-    )
-    .get(userId);
-}
-
-export function startCheckinSession(
-  userId: string,
-  workday: string,
-  channelId: string,
-): CheckinSessionRow {
-  const ts = nowIso();
-  db()
-    .prepare(
-      `INSERT INTO checkin_sessions (user_id, workday, stage, channel_id, started_at, updated_at)
-       VALUES (?, ?, 'ask', ?, ?, ?)
-       ON CONFLICT(user_id, workday) DO UPDATE SET
-         stage = 'ask', channel_id = excluded.channel_id,
-         started_at = excluded.started_at, updated_at = excluded.updated_at`,
-    )
-    .run(userId, workday, channelId, ts, ts);
-  return getCheckinSession(userId, workday)!;
-}
-
-export function completeCheckinSession(userId: string, workday: string, answerTs?: string): void {
-  db()
-    .prepare(
-      `UPDATE checkin_sessions SET stage = 'complete', answer_ts = COALESCE(?, answer_ts), updated_at = ?
-       WHERE user_id = ? AND workday = ?`,
-    )
-    .run(answerTs ?? null, nowIso(), userId, workday);
-}
-
-/** 편집된 메시지가 어느 날 체크인의 답이었는지 */
-export function findCheckinByAnswerTs(
-  userId: string,
-  messageTs: string,
-): CheckinSessionRow | undefined {
-  return db()
-    .prepare<[string, string], CheckinSessionRow>(
-      'SELECT * FROM checkin_sessions WHERE user_id = ? AND answer_ts = ? LIMIT 1',
-    )
-    .get(userId, messageTs);
-}
-
-/** 며칠 지나도록 답이 없는 세션은 닫는다 */
-export function abandonStaleCheckins(beforeWorkday: string): void {
-  db()
-    .prepare("UPDATE checkin_sessions SET stage = 'complete' WHERE workday < ? AND stage != 'complete'")
-    .run(beforeWorkday);
-}
+export const getCheckinSession = store.get.bind(store);
+export const openCheckinSession = store.open.bind(store);
+export const startCheckinSession = store.start.bind(store);
+export const completeCheckinSession = store.complete.bind(store);
+export const findCheckinByAnswerTs = store.findByAnswerTs.bind(store);
+export const abandonStaleCheckins = store.abandonStale.bind(store);

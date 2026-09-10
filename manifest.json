@@ -71,6 +71,11 @@
         "should_escape": false
       },
       {
+        "command": "/progress",
+        "description": "오후 중간 점검 — 진행 현황을 보고 갱신합니다",
+        "should_escape": false
+      },
+      {
         "command": "/milestone",
         "description": "마일스톤 만들기·진행도",
         "usage_hint": "[new|progress <번호> <%>|done <번호>]",

@@ -62,7 +62,7 @@ export function homeView(opts: {
       button({ text: '설정', actionId: ACTION.openSettings }),
     ]),
     context(
-      `아침 ${opts.user.checkin_time} 리마인드 · 저녁 ${opts.user.standup_time} done-next · ${opts.user.tz}`,
+      `아침 ${opts.user.checkin_time} · ${opts.user.midday_reminder ? `중간 점검 ${opts.user.midday_time} · ` : ''}저녁 ${opts.user.standup_time} · ${opts.user.tz}`,
     ),
   );
 }
@@ -103,6 +103,10 @@ const WORKDAY_OPTIONS: { text: string; value: string }[] = [
 export function settingsModal(user: UserRow, boardChannelId: string | null): ModalView {
   const workdayOption =
     WORKDAY_OPTIONS.find((o) => o.value === user.work_days) ?? WORKDAY_OPTIONS[0]!;
+  const middayOption = {
+    text: { type: 'plain_text' as const, text: '오후에 진행 현황 물어보기', emoji: true },
+    value: 'midday',
+  };
   const shareOption = {
     text: { type: 'plain_text' as const, text: '보고를 공개 채널에도 올리기', emoji: true },
     value: 'share',
@@ -168,6 +172,29 @@ export function settingsModal(user: UserRow, boardChannelId: string | null): Mod
           type: 'timepicker',
           action_id: BLOCK.setStandupAction,
           initial_time: user.standup_time,
+        },
+      },
+      {
+        type: 'input',
+        block_id: BLOCK.setMidday,
+        label: { type: 'plain_text', text: '오후 중간 점검 시각', emoji: true },
+        hint: { type: 'plain_text', text: '진행 현황을 보여 주고 갱신을 여쭙니다.' },
+        element: {
+          type: 'timepicker',
+          action_id: BLOCK.setMiddayAction,
+          initial_time: user.midday_time,
+        },
+      },
+      {
+        type: 'input',
+        block_id: BLOCK.setMiddayOn,
+        optional: true,
+        label: { type: 'plain_text', text: '중간 점검', emoji: true },
+        element: {
+          type: 'checkboxes',
+          action_id: BLOCK.setMiddayOnAction,
+          options: [middayOption],
+          ...(user.midday_reminder ? { initial_options: [middayOption] } : {}),
         },
       },
       {

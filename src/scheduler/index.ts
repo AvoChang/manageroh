@@ -11,9 +11,11 @@ import { buildReport, rangeFor } from '../domain/report.js';
 import { streakBadge } from '../domain/streak.js';
 import { closeDanglingSessions } from '../service/attendanceFlow.js';
 import { publishHome } from '../service/home.js';
+import { beginMidday } from '../service/middayFlow.js';
 import { beginStandup } from '../service/standupFlow.js';
 import { getAttendance } from '../db/attendance.js';
 import { abandonStaleCheckins } from '../db/checkins.js';
+import { abandonStaleMiddays } from '../db/middays.js';
 import { boardOpener, boardWrapup } from '../slack/blocks/board.js';
 import { COPY } from '../slack/copy.js';
 import { blocks, codeBlocks, context, section } from '../slack/blocks/common.js';
@@ -127,12 +129,23 @@ async function runForUser(client: WebClient, user: UserRow): Promise<void> {
     await sendMorning(client, user, today);
   }
 
-  // ② 저녁 — done-next 대화 시작
+  // ② 오후 — 진행 현황을 묻고 갱신을 촉구한다
+  if (
+    user.midday_reminder === 1 &&
+    due(user.midday_time, minutes) &&
+    !isSubmitted(user.slack_user_id, today) &&
+    isWorkingToday(user, today) &&
+    claimJob(user.slack_user_id, 'midday', today)
+  ) {
+    await beginMidday(client, user, today);
+  }
+
+  // ③ 저녁 — done-next 대화 시작
   if (due(user.standup_time, minutes) && claimJob(user.slack_user_id, 'standup', today)) {
     await beginStandup(client, user, today);
   }
 
-  // ③ 넛지 — 아직 안 냈으면 한 번만 더
+  // ④ 넛지 — 아직 안 냈으면 한 번만 더
   if (due(user.nudge_time, minutes) && !isSubmitted(user.slack_user_id, today)) {
     if (claimJob(user.slack_user_id, 'nudge', today)) {
       const streak = getStreak(user.slack_user_id).current;
@@ -140,7 +153,7 @@ async function runForUser(client: WebClient, user: UserRow): Promise<void> {
     }
   }
 
-  // ④ 주간보고 — 이번 주 마지막 근무일에
+  // ⑤ 주간보고 — 이번 주 마지막 근무일에
   const lastWorkday = Math.max(...workDays);
   if (
     weekdayOf(today) === lastWorkday &&
@@ -160,6 +173,15 @@ function due(scheduled: string, nowMinutes: number): boolean {
 
 function isSubmitted(userId: string, workday: Ymd): boolean {
   return getStandup(userId, workday)?.submitted_at != null;
+}
+
+/**
+ * 오늘 일을 하고 있는 흔적이 있는가.
+ * 할 일도 없고 출근도 안 찍은 날에 "진행되고 있나요?" 를 묻는 건 소음이다.
+ */
+function isWorkingToday(user: UserRow, today: Ymd): boolean {
+  if (tasksForDay(user.slack_user_id, today).length > 0) return true;
+  return getAttendance(user.slack_user_id, today)?.clock_in != null;
 }
 
 async function sendMorning(client: WebClient, user: UserRow, today: Ymd): Promise<void> {
@@ -235,6 +257,7 @@ async function runMaintenance(client: WebClient): Promise<void> {
 
   abandonStaleSessions(addDays(today, -2));
   abandonStaleCheckins(addDays(today, -2));
+  abandonStaleMiddays(addDays(today, -2));
   pruneJobRuns(addDays(today, -90));
   log.info('일일 정리 완료');
 }

@@ -32,9 +32,9 @@ export function ensureUser(input: {
     .prepare(
       `INSERT INTO users (
         slack_user_id, slack_team_id, display_name, tz, work_days,
-        checkin_time, standup_time, nudge_time, weekly_time,
+        checkin_time, standup_time, midday_time, nudge_time, weekly_time,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       input.userId,
@@ -44,6 +44,7 @@ export function ensureUser(input: {
       config.defaults.workDays,
       config.defaults.checkinTime,
       config.defaults.standupTime,
+      config.defaults.middayTime,
       config.defaults.nudgeTime,
       config.defaults.weeklyTime,
       ts,
@@ -60,6 +61,8 @@ type Patch = Partial<
     | 'work_days'
     | 'checkin_time'
     | 'standup_time'
+    | 'midday_time'
+    | 'midday_reminder'
     | 'nudge_time'
     | 'weekly_time'
     | 'dm_channel_id'

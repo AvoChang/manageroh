@@ -84,6 +84,7 @@ export const config = {
     workDays: optional('DEFAULT_WORK_DAYS', '1,2,3,4,5'),
     checkinTime: optional('DEFAULT_CHECKIN_TIME', '09:00'),
     standupTime: optional('DEFAULT_STANDUP_TIME', '17:50'),
+    middayTime: optional('DEFAULT_MIDDAY_TIME', '15:00'),
     nudgeTime: optional('DEFAULT_NUDGE_TIME', '18:40'),
     weeklyTime: optional('DEFAULT_WEEKLY_TIME', '17:00'),
   },
@@ -108,6 +109,7 @@ export const config = {
 // 부팅 시점에 형식 오류를 잡는다 — 스케줄러가 조용히 안 도는 것보다 낫다.
 parseHm(config.defaults.checkinTime, 'DEFAULT_CHECKIN_TIME');
 parseHm(config.defaults.standupTime, 'DEFAULT_STANDUP_TIME');
+parseHm(config.defaults.middayTime, 'DEFAULT_MIDDAY_TIME');
 parseHm(config.defaults.nudgeTime, 'DEFAULT_NUDGE_TIME');
 parseHm(config.attendance.lunchStart, 'LUNCH_START');
 parseHm(config.attendance.lunchEnd, 'LUNCH_END');

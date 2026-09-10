@@ -114,6 +114,8 @@ export function registerViews(app: App): void {
     const workDays = readValue(view, BLOCK.setWorkDays, BLOCK.setWorkDaysAction);
     const checkin = readValue(view, BLOCK.setCheckin, BLOCK.setCheckinAction);
     const standup = readValue(view, BLOCK.setStandup, BLOCK.setStandupAction);
+    const midday = readValue(view, BLOCK.setMidday, BLOCK.setMiddayAction);
+    const middayOn = readChecked(view, BLOCK.setMiddayOn, BLOCK.setMiddayOnAction);
     const board = readValue(view, BLOCK.setBoard, BLOCK.setBoardAction);
     const share = readChecked(view, BLOCK.setShare, BLOCK.setShareAction);
 
@@ -122,6 +124,8 @@ export function registerViews(app: App): void {
       ...(workDays ? { work_days: workDays } : {}),
       ...(checkin ? { checkin_time: checkin } : {}),
       ...(standup ? { standup_time: standup } : {}),
+      ...(midday ? { midday_time: midday } : {}),
+      midday_reminder: middayOn ? 1 : 0,
       board_channel_id: board ?? null,
       share_to_board: share ? 1 : 0,
     });
@@ -137,7 +141,7 @@ export function registerViews(app: App): void {
         section(
           `⚙️ 설정을 저장했습니다.\n` +
             `• 타임존 ${updated.tz} · 근무 요일 ${updated.work_days}\n` +
-            `• 아침 ${updated.checkin_time} · done-next ${updated.standup_time}\n` +
+            `• 아침 ${updated.checkin_time} · 중간 점검 ${updated.midday_reminder ? updated.midday_time : '꺼짐'} · done-next ${updated.standup_time}\n` +
             `• 공개 보드 ${updated.board_channel_id ? `<#${updated.board_channel_id}>` : '없음'}` +
             `${updated.share_to_board ? '' : ' (공유 꺼짐)'}`,
         ),

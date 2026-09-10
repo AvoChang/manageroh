@@ -12,6 +12,8 @@ export interface UserRow {
   work_days: string;
   checkin_time: string;
   standup_time: string;
+  midday_time: string;
+  midday_reminder: number;
   nudge_time: string;
   weekly_time: string;
   dm_channel_id: string | null;
