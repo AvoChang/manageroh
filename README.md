@@ -225,8 +225,15 @@ git init && git add -A && git commit -m "업무 리듬 봇"
 >
 > Node 22 = ABI 127, Node 20 = 115, Node 24 = 137. 목록에 있는 것만 쓴다.
 
-> 빌드 명령이 `npm ci --include=dev` 인 이유 — Railway 가 production 모드로 설치하면
-> `typescript` 가 빠져서 `npm run build` 가 실패한다. `--include=dev` 로 강제한다.
+> 빌드 명령이 `npm ci` 가 아니라 **`npm install --include=dev`** 인 이유가 둘 있다.
+>
+> - `npm ci` 는 `node_modules` 를 통째로 지운다. Nixpacks 는 `node_modules/.cache` 에
+>   빌드 캐시를 **마운트**해 두므로 그걸 rmdir 하려다 `EBUSY` 로 죽는다.
+>   `npm install` 은 있는 것을 두고 모자란 것만 채워서 마운트를 안 건드린다.
+> - Railway 가 production 모드로 설치하면 `typescript` 가 빠져 `tsc` 가 없다.
+>   `--include=dev` 로 강제한다.
+>
+> Nixpacks 는 install 단계에서 이미 의존성을 깔아 두므로 이 명령은 보통 금방 끝난다.
 
 Socket Mode 라서 공개 URL·도메인·서명 검증이 전혀 필요 없다.
 HTTP 로 받고 싶으면 `SLACK_MODE=http` + `SLACK_SIGNING_SECRET` 을 넣고,

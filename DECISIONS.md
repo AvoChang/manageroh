@@ -228,8 +228,24 @@ Nixpacks 가 Node **24** 를 골랐는데 `better-sqlite3@11` 은 Node 24 용 pr
 Railway 가 production 모드로 깔면 `typescript` 가 빠져서 그다음 `npm run build` 가 실패한다.
 → 빌드 명령을 `npm ci --include=dev && npm run build` 로.
 
+그 둘을 고치니 install 단계는 통과했고, 이번엔 **빌드 단계**가 죽었다.
+
+```
+npm error EBUSY: resource busy or locked, rmdir '/app/node_modules/.cache'
+```
+
+`npm ci` 는 `node_modules` 를 통째로 지우는데, Nixpacks 는 `node_modules/.cache` 에
+빌드 캐시를 **마운트**해 둔다. 마운트 지점은 rmdir 할 수 없다.
+게다가 Nixpacks 가 install 단계에서 이미 다 깔아 놨으니 그 `npm ci` 는 중복이었다.
+
+→ 빌드 명령을 **`npm install --include=dev --no-audit --no-fund && npm run build`** 로.
+   `npm install` 은 있는 것을 두고 모자란 것만 채우므로 마운트를 안 건드린다.
+   `.cache` 를 만들어 둔 상태에서 로컬로 재현해 확인함 — 디렉터리가 그대로 남는다.
+
 **교훈** — 네이티브 의존성이 있으면 런타임 버전을 범위로 두지 말 것.
-그리고 빌드 도구가 devDependencies 에 있으면 배포 플랫폼의 production 모드를 의심할 것.
+빌드 도구가 devDependencies 에 있으면 배포 플랫폼의 production 모드를 의심할 것.
+그리고 **빌드 단계에서 `npm ci` 를 다시 돌리지 말 것** — install 단계가 이미 했고,
+캐시 마운트와 충돌한다.
 
 ### 마이그레이션은 되돌릴 수도 있어야 한다
 
