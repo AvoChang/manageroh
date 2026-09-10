@@ -45,6 +45,8 @@ export function standupClosing(opts: {
   badge: string;
   workedLabel: string | null;
   boardPosted: boolean;
+  /** 아직 퇴근을 안 찍었으면 여기서 바로 찍게 해 준다 */
+  stillWorking: boolean;
 }): KnownBlock[] {
   const lines = [COPY.standup.thanks];
   const facts: string[] = [`${opts.badge} 연속 *${opts.streak}일째*`];
@@ -55,9 +57,14 @@ export function standupClosing(opts: {
     section(lines.join('\n')),
     context(`${formatKorean(opts.workday)} · ${facts.join(' · ')}`),
     actions([
+      // 저녁에 회고와 퇴근은 사실상 한 몸이다 — 여기서 바로 찍을 수 있게 한다.
+      ...(opts.stillWorking
+        ? [button({ text: '퇴근 찍기', actionId: ACTION.clockOut, style: 'primary' as const })]
+        : []),
       button({ text: '보고서 보기', actionId: `${ACTION.reportPeriod}_today`, value: 'today' }),
       button({ text: '마일스톤', actionId: ACTION.openMilestoneList }),
     ]),
+    opts.stillWorking ? context('퇴근을 안 찍으면 정규 퇴근 시각으로 자동 마감됩니다.') : null,
   );
 }
 

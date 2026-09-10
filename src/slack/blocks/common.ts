@@ -73,3 +73,20 @@ export function codeBlocks(text: string): KnownBlock[] {
   if (buffer) chunks.push(buffer);
   return chunks.map((c) => section(`\`\`\`\n${c}\n\`\`\``));
 }
+
+/** 여러 줄을 슬랙 섹션 여러 개로 나눈다 (섹션당 3000자 제한) */
+export function mrkdwnSections(lines: string[], maxLines = 25): KnownBlock[] {
+  const out: KnownBlock[] = [];
+  let buffer: string[] = [];
+  const flush = () => {
+    if (buffer.length > 0) out.push(section(buffer.join('\n')));
+    buffer = [];
+  };
+  for (const line of lines) {
+    const projected = [...buffer, line].join('\n');
+    if (buffer.length >= maxLines || projected.length > 2800) flush();
+    buffer.push(line);
+  }
+  flush();
+  return out;
+}

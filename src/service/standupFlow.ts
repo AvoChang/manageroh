@@ -156,6 +156,7 @@ export async function finishStandup(
       badge,
       workedLabel,
       boardPosted: posted,
+      stillWorking: Boolean(attendance?.clock_in && !attendance.clock_out),
     }),
     text: COPY.standup.thanks,
   });

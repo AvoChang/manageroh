@@ -224,7 +224,7 @@ export function registerActions(app: App): void {
       user,
       blocks(
         section(`*${range.label} 업무보고*`),
-        ...codeBlocks(buildReport(user, period, today)),
+        ...codeBlocks(buildReport(user, range, today)),
         context('그대로 복사해서 쓰세요.'),
       ),
       `${range.label} 업무보고`,

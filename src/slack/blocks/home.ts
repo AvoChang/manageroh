@@ -39,7 +39,7 @@ export function homeView(opts: {
         ? button({ text: '퇴근하기', actionId: ACTION.clockOut, style: 'danger' })
         : button({ text: '출근하기', actionId: ACTION.clockIn, style: 'primary' }),
       button({
-        text: opts.standup?.submitted_at ? '오늘 보고 다시 쓰기' : '오늘 마무리하기',
+        text: opts.standup?.submitted_at ? '회고 다시 쓰기' : '오늘 회고 쓰기',
         actionId: ACTION.openStandup,
       }),
       button({ text: '새로고침', actionId: ACTION.refreshHome }),

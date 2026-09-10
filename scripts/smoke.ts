@@ -102,11 +102,41 @@ clockOut(USER, TUE, TZ, kst(TUE, '12:00'));
 const week = summarize(user0, startOfWeek(WED), endOfWeek(WED), WED);
 check('주간 합계 = 420 + 150', week.totalMinutes, 570);
 
+console.log('\n── 기간 해석 ──');
+const { parseRange, buildHistory, historyLines, rangeFor } = await import('../src/domain/report.js');
+const R = (t: string) => {
+  const r = parseRange(t, WED);
+  return r ? `${r.from}~${r.to}` : null;
+};
+check('빈 입력 = 오늘', R(''), `${WED}~${WED}`);
+check('이번주', R('주간'), '2026-09-07~2026-09-13');
+check('지난주', R('지난주'), '2026-08-31~2026-09-06');
+check('이번달', R('월간'), '2026-09-01~2026-09-30');
+check('지난달', R('지난달'), '2026-08-01~2026-08-31');
+check('특정 하루', R('2026-09-05'), '2026-09-05~2026-09-05');
+check('특정 달', R('2026-08'), '2026-08-01~2026-08-31');
+check('구간', R('2026-09-01~2026-09-10'), '2026-09-01~2026-09-10');
+check('구간 뒤집혀도 정렬', R('2026-09-10~2026-09-01'), '2026-09-01~2026-09-10');
+check('최근 N일', R('30일'), '2026-08-11~2026-09-09');
+check('못 알아들으면 null', R('아무말'), null);
+
 console.log('\n── 보고서 ──');
-const report = buildReport(user0, 'week', WED);
+const report = buildReport(user0, rangeFor('week', WED), WED);
 console.log(report.split('\n').map((l) => `   │ ${l}`).join('\n'));
 check('보고서에 근무시간 포함', report.includes('## 근무시간'), true);
 check('보고서에 나에게 한 말 포함', report.includes('오늘 잘했다'), true);
+
+const pastReport = buildReport(user0, parseRange('2026-09-07', WED)!, WED);
+check('지난 하루도 뽑힌다', pastReport.includes('이력서 정리'), true);
+
+console.log('\n── 히스토리 ──');
+const hist = buildHistory(user0, MON, WED);
+check('요청한 날짜 수만큼', hist.length, 3);
+check('월요일 완료 2건', hist.find((d) => d.date === MON)?.done, 2);
+check('월요일 회고 제출됨', hist.find((d) => d.date === MON)?.submitted, true);
+const histText = historyLines(hist).join('\n');
+check('빈 날도 빠지지 않는다', historyLines(buildHistory(user0, '2026-09-12', '2026-09-13')).length, 2);
+check('히스토리에 근무시간 표기', histText.includes('🏢'), true);
 
 console.log('\n── 답변 파싱 ──');
 const { splitItems } = await import('../src/domain/textItems.js');

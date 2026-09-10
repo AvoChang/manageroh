@@ -16,22 +16,99 @@
       "messages_tab_read_only_enabled": false
     },
     "slash_commands": [
-      { "command": "/출근", "description": "근무 시작을 기록합니다", "should_escape": false },
-      { "command": "/퇴근", "description": "근무 종료를 기록하고 오늘 근무시간을 계산합니다", "should_escape": false },
-      { "command": "/근무", "description": "근무시간 조회·정정", "usage_hint": "[수정 [YYYY-MM-DD] <출근> <퇴근>]", "should_escape": false },
-      { "command": "/in", "description": "근무 시작 (출근)", "should_escape": false },
-      { "command": "/out", "description": "근무 종료 (퇴근)", "should_escape": false },
-      { "command": "/hours", "description": "근무시간 조회·정정", "usage_hint": "[수정 [YYYY-MM-DD] <출근> <퇴근>]", "should_escape": false },
-      { "command": "/standup", "description": "done-next 회고를 지금 시작합니다", "usage_hint": "[다시]", "should_escape": false },
-      { "command": "/checkin", "description": "오늘 할 일을 정합니다", "should_escape": false },
-      { "command": "/done", "description": "방금 끝낸 일을 기록합니다", "usage_hint": "<내용>", "should_escape": false },
-      { "command": "/plan", "description": "오늘 할 일 목록을 봅니다", "should_escape": false },
-      { "command": "/milestone", "description": "마일스톤 만들기·진행도", "usage_hint": "[new|progress <번호> <%>|done <번호>]", "should_escape": false },
-      { "command": "/report", "description": "업무보고를 만듭니다", "usage_hint": "[today|week|month] [공유]", "should_escape": false },
-      { "command": "/streak", "description": "연속 기록을 봅니다", "should_escape": false },
-      { "command": "/pause", "description": "휴가 — 그동안 묻지 않고 연속 기록도 지켜 줍니다", "usage_hint": "<일수|YYYY-MM-DD|해제>", "should_escape": false },
-      { "command": "/settings", "description": "시간·타임존·공유 채널 설정", "should_escape": false },
-      { "command": "/help", "description": "사용법", "should_escape": false }
+      {
+        "command": "/출근",
+        "description": "근무 시작을 기록합니다",
+        "should_escape": false
+      },
+      {
+        "command": "/퇴근",
+        "description": "근무 종료를 기록하고 오늘 근무시간을 계산합니다",
+        "should_escape": false
+      },
+      {
+        "command": "/근무",
+        "description": "근무시간 조회·정정",
+        "usage_hint": "[수정 [YYYY-MM-DD] <출근> <퇴근>]",
+        "should_escape": false
+      },
+      {
+        "command": "/in",
+        "description": "근무 시작 (출근)",
+        "should_escape": false
+      },
+      {
+        "command": "/out",
+        "description": "근무 종료 (퇴근)",
+        "should_escape": false
+      },
+      {
+        "command": "/hours",
+        "description": "근무시간 조회·정정",
+        "usage_hint": "[수정 [YYYY-MM-DD] <출근> <퇴근>]",
+        "should_escape": false
+      },
+      {
+        "command": "/standup",
+        "description": "done-next 회고를 지금 시작합니다",
+        "usage_hint": "[다시]",
+        "should_escape": false
+      },
+      {
+        "command": "/checkin",
+        "description": "오늘 할 일을 정합니다",
+        "should_escape": false
+      },
+      {
+        "command": "/done",
+        "description": "방금 끝낸 일을 기록합니다",
+        "usage_hint": "<내용>",
+        "should_escape": false
+      },
+      {
+        "command": "/plan",
+        "description": "오늘 할 일 목록을 봅니다",
+        "should_escape": false
+      },
+      {
+        "command": "/milestone",
+        "description": "마일스톤 만들기·진행도",
+        "usage_hint": "[new|progress <번호> <%>|done <번호>]",
+        "should_escape": false
+      },
+      {
+        "command": "/report",
+        "description": "업무보고를 만듭니다",
+        "usage_hint": "[기간] [공유|파일]",
+        "should_escape": false
+      },
+      {
+        "command": "/history",
+        "description": "지나온 날들을 한 줄씩 훑어봅니다",
+        "usage_hint": "[기간] [파일]",
+        "should_escape": false
+      },
+      {
+        "command": "/streak",
+        "description": "연속 기록을 봅니다",
+        "should_escape": false
+      },
+      {
+        "command": "/pause",
+        "description": "휴가 — 그동안 묻지 않고 연속 기록도 지켜 줍니다",
+        "usage_hint": "<일수|YYYY-MM-DD|해제>",
+        "should_escape": false
+      },
+      {
+        "command": "/settings",
+        "description": "시간·타임존·공유 채널 설정",
+        "should_escape": false
+      },
+      {
+        "command": "/help",
+        "description": "사용법",
+        "should_escape": false
+      }
     ]
   },
   "oauth_config": {
@@ -45,7 +122,8 @@
         "users:read",
         "channels:read",
         "groups:read",
-        "app_mentions:read"
+        "app_mentions:read",
+        "files:write"
       ]
     }
   },

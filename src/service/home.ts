@@ -15,7 +15,7 @@ import { todayFor } from './context.js';
 export async function publishHome(client: WebClient, user: UserRow): Promise<void> {
   const today = todayFor(user);
   const attendance = getAttendance(user.slack_user_id, today);
-  const week = summarize(user, startOfWeek(today), endOfWeek(today), today);
+  const week = summarize(user, startOfWeek(today), endOfWeek(today), today, { includeOpen: true });
   const streak = getStreak(user.slack_user_id);
 
   try {

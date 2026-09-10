@@ -200,8 +200,8 @@ async function sendMorning(client: WebClient, user: UserRow, today: Ymd): Promis
 }
 
 async function sendWeekly(client: WebClient, user: UserRow, today: Ymd): Promise<void> {
-  const report = buildReport(user, 'week', today);
   const range = rangeFor('week', today);
+  const report = buildReport(user, range, today);
 
   await postDm(
     client,

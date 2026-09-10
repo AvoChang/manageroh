@@ -173,10 +173,27 @@ export interface AttendanceSummary {
   rows: AttendanceRow[];
 }
 
-export function summarize(user: UserRow, from: Ymd, to: Ymd, today: Ymd): AttendanceSummary {
+/**
+ * @param includeOpen 아직 퇴근을 안 찍은 날도 "지금까지" 로 세어 넣는다.
+ *   대시보드처럼 살아 있는 화면에서는 켠다 — 근무 중인데 합계가 0 이면 이상하다.
+ *   보고서는 끈다 — 확정된 값만 담아야 한다.
+ */
+export function summarize(
+  user: UserRow,
+  from: Ymd,
+  to: Ymd,
+  today: Ymd,
+  options: { includeOpen?: boolean; now?: Date } = {},
+): AttendanceSummary {
   const rows = attendanceInRange(user.slack_user_id, from, to);
-  const closed = rows.filter((r) => r.worked_minutes !== null);
-  const totalMinutes = closed.reduce((sum, r) => sum + (r.worked_minutes ?? 0), 0);
+  const now = options.now ?? new Date();
+  const counted = rows.filter(
+    (r) => r.worked_minutes !== null || (options.includeOpen === true && r.clock_in !== null),
+  );
+  const totalMinutes = counted.reduce(
+    (sum, r) => sum + (r.worked_minutes ?? minutesSoFar(r, user.tz, now) ?? 0),
+    0,
+  );
 
   const workDays = workDaysOf(user);
   const end = to < today ? to : today;
@@ -191,8 +208,8 @@ export function summarize(user: UserRow, from: Ymd, to: Ymd, today: Ymd): Attend
 
   return {
     totalMinutes,
-    days: closed.length,
-    averageMinutes: closed.length === 0 ? 0 : Math.round(totalMinutes / closed.length),
+    days: counted.length,
+    averageMinutes: counted.length === 0 ? 0 : Math.round(totalMinutes / counted.length),
     missingDays: Math.max(0, expected - rows.length),
     rows,
   };

@@ -7,7 +7,7 @@ import { addTask, openTasksBefore, tasksForDay } from '../db/tasks.js';
 import { updateUser } from '../db/users.js';
 import type { UserRow } from '../db/types.js';
 import { formatDuration, setManualAttendance, summarize } from '../domain/attendance.js';
-import { buildReport, rangeFor, type ReportPeriod } from '../domain/report.js';
+import { buildHistory, buildReport, historyLines, parseRange } from '../domain/report.js';
 import { streakBadge } from '../domain/streak.js';
 import { doClockIn, doClockOut } from '../service/attendanceFlow.js';
 import { resolveUser, todayFor } from '../service/context.js';
@@ -27,12 +27,21 @@ import {
   type Ymd,
 } from '../util/time.js';
 import { taskChecklist } from './blocks/checkin.js';
-import { actions, blocks, button, codeBlocks, context, divider, section } from './blocks/common.js';
+import {
+  actions,
+  blocks,
+  button,
+  codeBlocks,
+  context,
+  divider,
+  mrkdwnSections,
+  section,
+} from './blocks/common.js';
 import { settingsModal } from './blocks/home.js';
 import { milestoneList, milestoneModal } from './blocks/milestone.js';
 import { COPY } from './copy.js';
 import { ACTION } from './ids.js';
-import { postDm, postToBoard } from './notify.js';
+import { dmChannel, postDm, postToBoard } from './notify.js';
 
 /**
  * 명령 결과를 **DM 에 실제 메시지로** 남긴다.
@@ -51,6 +60,52 @@ async function record(
   await postDm(client, user, blocks(section(text)), text);
   if (!channelId.startsWith('D')) {
     await respond({ response_type: 'ephemeral', text });
+  }
+}
+
+const REPORT_USAGE = `기간을 못 알아들었습니다. 이렇게 쓰세요.
+\`/report\` 오늘 · \`/report 주간\` · \`/report 월간\`
+\`/report 지난주\` · \`/report 지난달\`
+\`/report 2026-09-05\` 하루 · \`/report 2026-08\` 그 달
+\`/report 2026-09-01~2026-09-10\` 구간 · \`/report 30일\` 최근 N일
+뒤에 \`공유\` 를 붙이면 채널에, \`파일\` 을 붙이면 파일로 보냅니다.`;
+
+/**
+ * 긴 보고서는 파일로 보낸다.
+ *
+ * 슬랙 메시지는 블록당 3000자라 몇 주치가 넘어가면 잘린다.
+ * 파일은 통째로 남고 내려받을 수도 있다. `files:write` 스코프가 필요하다.
+ */
+async function sendAsFile(
+  client: WebClient,
+  user: UserRow,
+  title: string,
+  content: string,
+  respond: (payload: { response_type: 'ephemeral'; text: string }) => Promise<unknown>,
+): Promise<void> {
+  const channel = await dmChannel(client, user);
+  if (!channel) {
+    await respond({ response_type: 'ephemeral', text: 'DM 채널을 열지 못했습니다.' });
+    return;
+  }
+  try {
+    await client.filesUploadV2({
+      channel_id: channel,
+      filename: `${title.replace(/[^\w가-힣.-]+/g, '_')}.md`,
+      title,
+      content,
+      initial_comment: `📄 ${title}`,
+    });
+    await respond({ response_type: 'ephemeral', text: 'DM 으로 파일을 보냈습니다.' });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const missingScope = /missing_scope|not_allowed_token_type/.test(message);
+    await respond({
+      response_type: 'ephemeral',
+      text: missingScope
+        ? '파일로 보내려면 앱에 `files:write` 권한이 필요합니다.\nmanifest 를 다시 적용하고 앱을 재설치해 주세요.'
+        : `파일 전송에 실패했습니다: ${message}`,
+    });
   }
 }
 
@@ -85,9 +140,11 @@ export function registerCommands(app: App): void {
       return;
     }
 
-    const day = summarize(user, today, today, today);
-    const week = summarize(user, startOfWeek(today), endOfWeek(today), today);
-    const month = summarize(user, startOfMonth(today), endOfMonth(today), today);
+    // 살아 있는 화면이므로 아직 퇴근 안 찍은 오늘도 "지금까지" 로 세어 넣는다.
+    const live = { includeOpen: true };
+    const day = summarize(user, today, today, today, live);
+    const week = summarize(user, startOfWeek(today), endOfWeek(today), today, live);
+    const month = summarize(user, startOfMonth(today), endOfMonth(today), today, live);
 
     await respond({
       response_type: 'ephemeral',
@@ -256,21 +313,29 @@ export function registerCommands(app: App): void {
   });
 
   // ── 업무보고 ────────────────────────────────────────────────────
+  // 기간을 자유롭게 받는다: 오늘/주간/월간/지난주/지난달/날짜/구간/최근 N일
   app.command(/^\/(report|보고|업무보고)$/, async ({ ack, command, client, respond }) => {
     await ack();
     const user = await resolveUser(client, command.user_id, command.team_id);
     const today = todayFor(user);
-    const text = (command.text ?? '').toLowerCase();
+    const raw = (command.text ?? '').trim();
 
-    const period: ReportPeriod = /week|주간|주/.test(text)
-      ? 'week'
-      : /month|월간|월/.test(text)
-        ? 'month'
-        : 'today';
-    const share = /공유|share/.test(text);
+    const share = /공유|share/i.test(raw);
+    const asFile = /파일|file/i.test(raw);
+    const spec = raw.replace(/공유|share|파일|file/gi, '').trim();
 
-    const report = buildReport(user, period, today);
-    const range = rangeFor(period, today);
+    const range = parseRange(spec, today);
+    if (!range) {
+      await respond({ response_type: 'ephemeral', text: REPORT_USAGE });
+      return;
+    }
+
+    const report = buildReport(user, range, today);
+
+    if (asFile) {
+      await sendAsFile(client, user, `업무보고 ${range.label}`, report, respond);
+      return;
+    }
 
     if (share) {
       const posted = await postToBoard(
@@ -281,7 +346,9 @@ export function registerCommands(app: App): void {
       );
       await respond({
         response_type: 'ephemeral',
-        text: posted ? '채널에 공유했습니다.' : '공유할 보드 채널이 설정되지 않았습니다. `/settings` 에서 지정하세요.',
+        text: posted
+          ? '채널에 공유했습니다.'
+          : '공유할 보드 채널이 설정되지 않았습니다. `/settings` 에서 지정하세요.',
       });
       return;
     }
@@ -292,7 +359,47 @@ export function registerCommands(app: App): void {
       blocks: blocks(
         section(`*${range.label} 업무보고* — 아래를 그대로 복사해서 쓰세요.`),
         ...codeBlocks(report),
-        context('`/report week 공유` 처럼 적으면 보드 채널에 바로 올립니다.'),
+        context('`공유` 를 붙이면 채널에, `파일` 을 붙이면 파일로 보냅니다. 기간은 `/report 지난달` 처럼.'),
+      ),
+    });
+  });
+
+  // ── 지나온 날들 훑어보기 ────────────────────────────────────────
+  app.command(/^\/(history|기록|히스토리)$/, async ({ ack, command, client, respond }) => {
+    await ack();
+    const user = await resolveUser(client, command.user_id, command.team_id);
+    const today = todayFor(user);
+    const raw = (command.text ?? '').trim();
+
+    const asFile = /파일|file/i.test(raw);
+    const spec = raw.replace(/파일|file/gi, '').trim();
+    const range = parseRange(spec.length > 0 ? spec : '14일', today);
+    if (!range) {
+      await respond({ response_type: 'ephemeral', text: REPORT_USAGE });
+      return;
+    }
+
+    const days = buildHistory(user, range.from, range.to);
+    const lines = historyLines(days);
+    const submitted = days.filter((d) => d.submitted).length;
+    const expected = days.filter((d) => d.workday && d.date <= today).length;
+    const worked = days.reduce((sum, d) => sum + (d.workedMinutes ?? 0), 0);
+    const doneCount = days.reduce((sum, d) => sum + d.done, 0);
+    const head =
+      `*${range.label}* · 회고 ${submitted}/${expected}일 · 완료 ${doneCount}건 · 근무 ${formatDuration(worked)}`;
+
+    if (asFile) {
+      await sendAsFile(client, user, `기록 ${range.label}`, [head, '', ...lines].join('\n'), respond);
+      return;
+    }
+
+    await respond({
+      response_type: 'ephemeral',
+      text: `${range.label} 기록`,
+      blocks: blocks(
+        section(head),
+        ...mrkdwnSections(lines),
+        context('`/history 지난달`, `/history 30일`, `/history 파일` 처럼 쓸 수 있습니다.'),
       ),
     });
   });
