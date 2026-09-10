@@ -213,6 +213,21 @@ git init && git add -A && git commit -m "업무 리듬 봇"
 2. 서비스 → **Settings → Volumes → Add Volume**, 마운트 경로 **`/data`**
 3. 배포. 로그에 `Socket Mode 로 슬랙에 연결했습니다.` 가 뜨면 끝
 
+> 🔴 **Node 버전을 22 로 고정해 뒀다.** `.nvmrc` 와 `package.json` 의 `engines.node` 둘 다.
+> `better-sqlite3` 는 네이티브 모듈이고 **Node 24 용 prebuilt 바이너리가 없다.**
+> 버전을 범위(`>=20`)로 두면 Nixpacks 가 최신을 골라 소스 컴파일로 넘어가는데,
+> Nixpacks 이미지에 Python 이 없어서 빌드가 죽는다. 올리기 전에 확인하는 법:
+>
+> ```bash
+> curl -s https://api.github.com/repos/WiseLibs/better-sqlite3/releases/tags/v11.10.0 \
+>   | grep -o 'node-v[0-9]*-linux-x64'
+> ```
+>
+> Node 22 = ABI 127, Node 20 = 115, Node 24 = 137. 목록에 있는 것만 쓴다.
+
+> 빌드 명령이 `npm ci --include=dev` 인 이유 — Railway 가 production 모드로 설치하면
+> `typescript` 가 빠져서 `npm run build` 가 실패한다. `--include=dev` 로 강제한다.
+
 Socket Mode 라서 공개 URL·도메인·서명 검증이 전혀 필요 없다.
 HTTP 로 받고 싶으면 `SLACK_MODE=http` + `SLACK_SIGNING_SECRET` 을 넣고,
 슬랙 앱 설정에서 Socket Mode 를 끈 뒤 Request URL 을 `https://<도메인>/slack/events` 로 지정한다.

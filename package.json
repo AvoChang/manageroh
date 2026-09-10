@@ -5,7 +5,7 @@
   "description": "슬랙 채널을 직장처럼 만들어 주는 업무 리듬 봇",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",

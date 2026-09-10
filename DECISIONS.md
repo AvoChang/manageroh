@@ -206,6 +206,31 @@ Railway 재배포로 프로세스가 다시 떠도 그날 알림이 두 번 가�
 링크로 나가는 버튼도 슬랙은 `block_actions` 를 보낸다. 핸들러가 없으면 사용자 화면에 오류가 뜬다.
 (지금은 url 버튼을 쓰는 곳이 없지만, 추가할 때 잊지 말 것.)
 
+### Railway 배포 — 네이티브 모듈이 Node 버전을 붙잡는다
+
+첫 배포가 `npm ci` 에서 죽었다.
+
+```
+prebuild-install warn install No prebuilt binaries found
+  (target=24.10.0 runtime=node arch=x64 libc= platform=linux)
+gyp ERR! find Python  Could not find any Python installation to use
+```
+
+Nixpacks 가 Node **24** 를 골랐는데 `better-sqlite3@11` 은 Node 24 용 prebuilt 가 없다.
+소스 컴파일로 넘어갔고, Nixpacks 이미지에 Python 이 없어서 끝났다.
+
+`engines.node` 가 `">=20"` 같은 **범위**였던 게 원인이다 — 범위를 주면 최신을 고른다.
+
+→ `.nvmrc` 와 `engines.node` 를 **`22.x`** 로 고정.
+   릴리스 자산 목록으로 확인함: `node-v127-linux-x64`(Node 22)는 있고 `v137`(Node 24)은 없다.
+
+같은 로그에 지뢰가 하나 더 있었다. `npm warn config production` —
+Railway 가 production 모드로 깔면 `typescript` 가 빠져서 그다음 `npm run build` 가 실패한다.
+→ 빌드 명령을 `npm ci --include=dev && npm run build` 로.
+
+**교훈** — 네이티브 의존성이 있으면 런타임 버전을 범위로 두지 말 것.
+그리고 빌드 도구가 devDependencies 에 있으면 배포 플랫폼의 production 모드를 의심할 것.
+
 ### 마이그레이션은 되돌릴 수도 있어야 한다
 
 09:30 알림을 접으면서 `users.archive_time` / `archive_reminder` 컬럼을 지워야 했다.
