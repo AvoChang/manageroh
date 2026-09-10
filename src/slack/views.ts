@@ -1,6 +1,6 @@
 import type { App } from '@slack/bolt';
 import { createMilestone, getMilestone, updateMilestone } from '../db/milestones.js';
-import { updateUser } from '../db/users.js';
+import { getUser, updateUser } from '../db/users.js';
 import { resolveUser } from '../service/context.js';
 import { publishHome } from '../service/home.js';
 import { log } from '../util/logger.js';
@@ -126,8 +126,24 @@ export function registerViews(app: App): void {
       share_to_board: share ? 1 : 0,
     });
 
-    const updated = await resolveUser(client, body.user.id, body.team?.id);
+    const updated = getUser(user.slack_user_id)!;
     await publishHome(client, updated);
+
+    // 설정도 "내가 뭘 바꿨더라" 를 되짚을 수 있어야 한다 — 한 줄로 남긴다.
+    await postDm(
+      client,
+      updated,
+      blocks(
+        section(
+          `⚙️ 설정을 저장했습니다.\n` +
+            `• 타임존 ${updated.tz} · 근무 요일 ${updated.work_days}\n` +
+            `• 아침 ${updated.checkin_time} · done-next ${updated.standup_time}\n` +
+            `• 공개 보드 ${updated.board_channel_id ? `<#${updated.board_channel_id}>` : '없음'}` +
+            `${updated.share_to_board ? '' : ' (공유 꺼짐)'}`,
+        ),
+      ),
+      '설정을 저장했습니다.',
+    );
     log.debug(`설정 저장: ${user.slack_user_id}`);
   });
 }

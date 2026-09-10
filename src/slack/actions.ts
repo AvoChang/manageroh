@@ -120,12 +120,16 @@ export function registerActions(app: App): void {
     const task = Number.isInteger(id) ? getTask(id) : undefined;
     if (!task || task.user_id !== user.slack_user_id) return;
 
+    // 눌러도 아무 말이 없으면 눌렸는지조차 알 수 없다. 결과를 DM 에 한 줄로 남긴다.
+    let note: string;
     switch (op) {
       case 'done':
         setTaskStatus(id, 'done');
+        note = `✅ 완료 — ${task.title}`;
         break;
       case 'undone':
         setTaskStatus(id, 'planned');
+        note = `↩︎ 완료 취소 — ${task.title}`;
         break;
       case 'defer':
         addTask({
@@ -136,13 +140,16 @@ export function registerActions(app: App): void {
           source: 'plan',
         });
         setTaskStatus(id, 'carried');
+        note = `➡️ 내일로 미룸 — ${task.title}`;
         break;
       case 'drop':
         deleteTask(id);
+        note = `🗑 삭제 — ${task.title}`;
         break;
       default:
         return;
     }
+    await reply(client, user, b, note);
     await publishHome(client, user);
   });
 
@@ -191,9 +198,11 @@ export function registerActions(app: App): void {
         break;
       case 'reopen':
         updateMilestone(id, { status: 'active', completed_at: null });
+        await reply(client, user, b, `↩︎ *${milestone.title}* 를 다시 진행 중으로 되돌렸습니다.`);
         break;
       case 'archive':
         updateMilestone(id, { status: 'archived' });
+        await reply(client, user, b, `📦 *${milestone.title}* 를 보관했습니다.`);
         break;
       default:
         return;

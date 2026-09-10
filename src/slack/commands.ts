@@ -1,6 +1,6 @@
 import type { App } from '@slack/bolt';
 import type { WebClient } from '@slack/web-api';
-import { listMilestones, updateMilestone } from '../db/milestones.js';
+import { getMilestone, listMilestones, updateMilestone } from '../db/milestones.js';
 import { getStandup } from '../db/standups.js';
 import { getStreak } from '../db/streaks.js';
 import { addTask, openTasksBefore, tasksForDay } from '../db/tasks.js';
@@ -217,7 +217,14 @@ export function registerCommands(app: App): void {
         return;
       }
       updateMilestone(id, { progress_mode: 'manual', manual_progress: Math.round(pct) });
-      await respond({ response_type: 'ephemeral', text: `#${id} 진행도를 ${Math.round(pct)}% 로 바꿨습니다.` });
+      const target = getMilestone(id);
+      await record(
+        client,
+        user,
+        command.channel_id,
+        `🎯 *${target?.title ?? `#${id}`}* 진행도를 *${Math.round(pct)}%* 로 바꿨습니다.`,
+        respond,
+      );
       await publishHome(client, user);
       return;
     }
@@ -228,8 +235,15 @@ export function registerCommands(app: App): void {
         await respond({ response_type: 'ephemeral', text: '사용법: `/milestone done <번호>`' });
         return;
       }
+      const finished = getMilestone(id);
       updateMilestone(id, { status: 'done', completed_at: new Date().toISOString() });
-      await respond({ response_type: 'ephemeral', text: `🎉 #${id} 마일스톤을 완료 처리했습니다.` });
+      await record(
+        client,
+        user,
+        command.channel_id,
+        `🎉 마일스톤 *${finished?.title ?? `#${id}`}* 완료!`,
+        respond,
+      );
       await publishHome(client, user);
       return;
     }
@@ -317,7 +331,13 @@ export function registerCommands(app: App): void {
 
     if (arg === '해제' || arg === 'off' || arg === 'cancel') {
       updateUser(user.slack_user_id, { paused_until: null });
-      await respond({ response_type: 'ephemeral', text: '휴가를 해제했습니다. 내일부터 다시 물어볼게요.' });
+      await record(
+        client,
+        user,
+        command.channel_id,
+        ':arrow_forward: 휴가를 해제했습니다. 내일부터 다시 물어볼게요.',
+        respond,
+      );
       return;
     }
 
@@ -334,10 +354,13 @@ export function registerCommands(app: App): void {
     }
 
     updateUser(user.slack_user_id, { paused_until: until });
-    await respond({
-      response_type: 'ephemeral',
-      text: `${formatKorean(until)} 까지 쉬는 것으로 해 뒀습니다. 그동안은 안 물어보고, 연속 기록도 안 끊깁니다.`,
-    });
+    await record(
+      client,
+      user,
+      command.channel_id,
+      `:palm_tree: *${formatKorean(until)}* 까지 쉬는 것으로 해 뒀습니다.\n그동안은 안 물어보고, 연속 기록도 안 끊깁니다.`,
+      respond,
+    );
   });
 
   // ── 설정 ────────────────────────────────────────────────────────
